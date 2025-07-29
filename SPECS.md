@@ -7,7 +7,7 @@ A lean MCP (Model Context Protocol) server that provides LLM agents with transpa
 
 ### Deployment Environment
 - **Platform**: OpenShift cluster (Kubernetes pod)
-- **Language**: Python 3.11+
+- **Language**: Python 3.12+ (using Red Hat UBI9 Python base image)
 - **Architecture**: Single container, stateless
 - **Configuration**: Grafana datasource YAML files mounted as ConfigMap
 - **Network**: HTTP access (SSL termination handled externally)
@@ -26,31 +26,18 @@ A lean MCP (Model Context Protocol) server that provides LLM agents with transpa
 - **Project file**: `pyproject.toml` with uv configuration
 
 ### Required Dependencies
-```toml
-[project]
-dependencies = [
-    "mcp>=1.12.0",
-    "fastmcp-http>=0.1.4",
-    "pyyaml>=6.0",
-    "httpx>=0.24.0",
-    "structlog>=23.0.0",
-    "pydantic>=2.0.0"
-]
+**Production dependencies:**
+- `mcp>=1.12.0` - Model Context Protocol library with FastMCP
+- `fastmcp-http>=0.1.4` - HTTP transport for MCP
+- `pyyaml>=6.0` - YAML configuration parsing
+- `httpx>=0.24.0` - HTTP client for Prometheus API calls
+- `structlog>=23.0.0` - Structured logging
+- `pydantic>=2.0.0` - Data validation and serialization
 
-[tool.uv]
-dev-dependencies = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.8.0",
-    "types-PyYAML>=6.0.0"
-]
-
-# Note: FastMCP with streamable HTTP transport for production deployment
-# Use: uv run python -m promesh_mcp, uv run pytest --cov --cov-report=html, etc.
-# Development: make run (uses proper module execution)
-```
+**Development dependencies:**
+- `pytest>=7.0.0` with `pytest-asyncio>=0.21.0` and `pytest-cov>=4.0.0` for testing
+- `ruff>=0.1.0` for linting and formatting
+- `mypy>=1.8.0` with `types-PyYAML>=6.0.0` for type checking
 
 ### File Structure
 ```
@@ -80,25 +67,12 @@ dev-dependencies = [
 - **Reload**: Static configuration (no runtime reload needed for v1)
 
 ### Expected Datasource YAML Structure
-```yaml
-apiVersion: 1
-prune: true
-datasources:
-  - access: "proxy"
-    editable: false
-    jsonData:
-      httpHeaderName1: "Authorization"
-    name: "cluster-name-prometheus"
-    orgId: 1  
-    secureJsonData:
-      httpHeaderValue1: "Bearer <token>"
-    type: "prometheus"
-    url: "https://prometheus.example.com"
-    version: 1
-  - type: "loki"  # This will be skipped
-    name: "loki-datasource"
-    # ... other fields
-```
+- **Format**: Standard Grafana datasource YAML format
+- **API version**: Must be `apiVersion: 1`
+- **Datasource filtering**: Only process entries where `type: "prometheus"`
+- **Required fields per datasource**: `name`, `url`, `type`, `jsonData.httpHeaderName1`, `secureJsonData.httpHeaderValue1`
+- **Authentication**: Bearer token via `jsonData.httpHeaderName1` and `secureJsonData.httpHeaderValue1`
+- **Mixed datasources**: Non-prometheus datasources (e.g., Loki) will be ignored
 
 ### Required Datasource Fields (for type="prometheus" only)
 Extract and validate these fields from each prometheus datasource:
@@ -113,79 +87,30 @@ Extract and validate these fields from each prometheus datasource:
 ### Tool Categories
 
 #### 1. Discovery Tools
-```python
-@tool
-def list_datasources() -> list[dict]:
-    """List all available Prometheus datasources"""
-    # Returns: [{"id": "datasource_name", "url": "...", "type": "prometheus"}]
-
-@tool  
-def list_metrics(datasource_id: str) -> list[str]:
-    """Get all available metric names from a datasource"""
-    # Uses: GET /api/v1/label/__name__/values
-
-@tool
-def get_metric_metadata(datasource_id: str, metric_name: str) -> dict:
-    """Get metadata for a specific metric"""
-    # Uses: GET /api/v1/metadata
-    # Returns: type, help, unit information
-```
+- **list_datasources()**: Returns list of all configured Prometheus datasources with id, url, type
+- **list_metrics(datasource_id)**: Get all metric names using `/api/v1/label/__name__/values`
+- **get_metric_metadata(datasource_id, metric_name)**: Get metric metadata using `/api/v1/metadata`
 
 #### 2. Query Tools
-```python
-@tool
-def query_instant(datasource_id: str, promql: str, time: str = None) -> dict:
-    """Execute instant PromQL query"""
-    # Uses: GET /api/v1/query
-    # time format: RFC3339 or Unix timestamp
-
-@tool
-def query_range(datasource_id: str, promql: str, start: str, end: str, step: str) -> dict:
-    """Execute range PromQL query"""
-    # Uses: GET /api/v1/query_range
-    # step format: duration string (e.g., "30s", "1m", "5m")
-
-@tool
-def query_prometheus(datasource_id: str, promql: str, start_time: str = None, end_time: str = None) -> dict:
-    """Smart query that chooses instant or range based on parameters"""
-    # Wrapper that calls query_instant or query_range based on parameters
-```
+- **query_instant(datasource_id, promql, time?)**: Execute instant PromQL query using `/api/v1/query`
+- **query_range(datasource_id, promql, start, end, step)**: Execute range PromQL query using `/api/v1/query_range`
+- **query_prometheus(datasource_id, promql, start_time?, end_time?)**: Smart wrapper that chooses instant or range based on parameters
 
 #### 3. Analysis Helper Tools
-```python
-@tool
-def get_metric_labels(datasource_id: str, metric_name: str) -> list[str]:
-    """Get all label names for a specific metric"""
-    # Uses: GET /api/v1/series?match[]={metric_name}
-
-@tool
-def get_label_values(datasource_id: str, label_name: str, metric_name: str = None) -> list[str]:
-    """Get all values for a specific label"""
-    # Uses: GET /api/v1/label/{label_name}/values
-
-@tool
-def find_metrics_by_pattern(datasource_id: str, pattern: str) -> list[str]:
-    """Find metrics matching a regex pattern"""
-    # Client-side filtering of list_metrics() results
-```
+- **get_metric_labels(datasource_id, metric_name)**: Get all label names for a metric using `/api/v1/series`
+- **get_label_values(datasource_id, label_name, metric_name?)**: Get all values for a label using `/api/v1/label/{label_name}/values`
+- **find_metrics_by_pattern(datasource_id, pattern)**: Find metrics matching regex pattern via client-side filtering
 
 ## Data Format Standards
 
 ### Tool Response Format
-All tools must return structured data with consistent formatting:
-
-```python
-{
-    "status": "success" | "error",
-    "timestamp": "2025-07-25T12:00:00+00:00",  # ISO 8601 UTC timestamp
-    "datasource": "datasource_id",  # for datasource-specific tools
-    "query": "original_promql_query",  # for query tools
-    "data": {
-        # Prometheus API response data unchanged
-    },
-    "error": "error_message"  # only if status == "error"
-}
-```
+All tools must return structured JSON with consistent formatting:
+- **status**: "success" or "error"
+- **timestamp**: ISO 8601 UTC timestamp
+- **datasource**: datasource_id (for datasource-specific tools)
+- **query**: original PromQL query (for query tools)
+- **data**: Prometheus API response data unchanged
+- **error**: error message (only if status == "error")
 
 ### Time Series Data Preservation
 - **No aggregation**: Pass through Prometheus data unchanged
@@ -202,14 +127,10 @@ All tools must return structured data with consistent formatting:
 4. **Step parameter**: Must be valid duration string
 
 ### Error Response Format
-```python
-{
-    "status": "error",
-    "error": "Clear error message",
-    "datasource": "datasource_id",  # if applicable
-    "details": {}  # Additional context if helpful
-}
-```
+- **status**: Must be "error"
+- **error**: Clear error message
+- **datasource**: datasource_id (if applicable)
+- **details**: Additional context (if helpful)
 
 ### Error Categories
 - `DATASOURCE_NOT_FOUND`: Invalid datasource_id
@@ -257,16 +178,24 @@ This ensures reliable shutdown behavior even with persistent client connections 
 ## Container Specification
 
 ### Dockerfile Requirements
-```dockerfile
-FROM python:3.11-slim
-WORKDIR /app
-RUN pip install uv
-COPY pyproject.toml .
-RUN uv sync --frozen
-COPY . .
-EXPOSE 8000
-CMD ["uv", "run", "python", "-m", "promesh_mcp"]
-```
+- **Multi-stage build**: Must include base, builder, test, and production stages
+- **Base image**: Red Hat UBI9 Python 3.12 with specific version tag and SHA digest (no `latest` tags)
+- **Base registry**: Use `registry.redhat.io` for official Red Hat images
+- **Dependency management**: Use `uv` for Python package management
+- **Test integration**: Test stage must run full test suite - build fails if tests fail
+- **Production optimization**: Final stage contains only runtime dependencies
+- **Port exposure**: Expose ports 8000 (MCP) and 8080 (health/metrics)
+- **Entry point**: Use `uv run python -m promesh_mcp` as CMD
+
+### Multi-Stage Build Requirements
+- **Base Image**: Must use Red Hat UBI9 Python with specific version tag and SHA digest (no `latest` tags)
+- **Test Stage**: Must run full test suite as part of build process - build fails if tests fail
+- **Production Stage**: Lean final image with only runtime dependencies
+- **Security**: Uses official Red Hat registry images for enterprise compliance
+- **Build Targets**: 
+  - `docker build --target test` - Build and run tests only
+  - `docker build --target prod` - Build production image (default)
+  - `docker build .` - Full build including test execution
 
 ### Environment Variables
 - `PORT`: MCP server port (default: 8000)
@@ -317,25 +246,13 @@ Note: Advanced security patterns were removed to keep the implementation lean. H
 
 ## Modern MCP Library Benefits
 
-The current MCP library (v1.12.2) includes `FastMCP` with modern `@tool` decorators that can significantly simplify the implementation:
-
-```python
-from mcp.server.fastmcp import FastMCP
-
-app = FastMCP("promesh-mcp")
-
-@app.tool()
-def list_datasources() -> list[dict]:
-    """List all available Prometheus datasources"""
-    # Implementation here
-    
-@app.tool()
-def query_instant(datasource_id: str, promql: str, time: str = None) -> dict:
-    """Execute instant PromQL query"""
-    # Implementation here
-```
-
-**✅ IMPLEMENTED**: The server now uses FastMCP with `@app.tool()` decorators for all 9 tools, providing a much cleaner and more maintainable implementation.
+**FastMCP Implementation Requirements:**
+- **Library**: Use MCP library v1.12.2+ with FastMCP
+- **Decorator pattern**: Implement all tools using `@app.tool()` decorators
+- **Server initialization**: Create FastMCP app instance with project name
+- **Tool registration**: Automatic tool registration and routing via decorators
+- **Type hints**: Use proper Python type hints for all tool parameters and return types
+- **Documentation**: Include docstrings for all tools for automatic MCP tool descriptions
 
 ## Implementation Guidelines
 
@@ -368,52 +285,12 @@ def query_instant(datasource_id: str, promql: str, time: str = None) -> dict:
 - `mcp_datasources_configured`: Gauge of configured datasources
 - `mcp_connected_clients`: Gauge of active client connections (basic tracking)
 
-**Implementation:**
-```python
-import structlog
-import time
-
-# Configure structured logging with INFO level for visibility
-logging.getLogger("fastmcp").setLevel(logging.INFO)
-logging.getLogger("mcp").setLevel(logging.INFO)
-logging.getLogger("uvicorn").setLevel(logging.INFO)
-logging.getLogger("uvicorn.access").setLevel(logging.INFO)  # Keep access logs visible
-
-# Access logging decorator for all MCP tools
-def mcp_access_log(tool_name: str) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            start_time = time.time()
-            datasource_id = kwargs.get('datasource_id', 'N/A')
-            
-            logger.info(f"MCP tool called: {tool_name}", 
-                       level="INFO", tool=tool_name, datasource=datasource_id)
-            
-            try:
-                result = await func(*args, **kwargs)
-                duration = time.time() - start_time
-                logger.info(f"MCP tool completed: {tool_name}",
-                           level="INFO", tool=tool_name, datasource=datasource_id,
-                           duration_ms=round(duration * 1000, 2), status="success")
-                return result
-            except Exception as e:
-                duration = time.time() - start_time
-                logger.error(f"MCP tool failed: {tool_name}",
-                            level="ERROR", tool=tool_name, datasource=datasource_id,
-                            duration_ms=round(duration * 1000, 2), status="error",
-                            error=str(e), error_type=type(e).__name__)
-                raise
-        return wrapper
-    return decorator
-
-# Apply to all tools
-@app.tool()
-@mcp_access_log("query_instant")
-@tool_error_handler
-async def query_instant(datasource_id: str, promql: str, time: str | None = None) -> str:
-    # Implementation
-```
+**Implementation Requirements:**
+- **Logging libraries**: Use `structlog` for structured logging with INFO level default
+- **Access logging decorator**: Implement decorator for all MCP tools to track timing and status
+- **Logger configuration**: Set INFO level for FastMCP, MCP, and Uvicorn loggers
+- **Metrics collection**: Use Prometheus client library for metrics endpoints
+- **Decorator pattern**: Apply logging and error handling decorators to all `@app.tool()` functions
 
 ### Testing Strategy
 - **Coverage**: >95% unit and integration test coverage
@@ -474,34 +351,12 @@ The implementation is complete when:
 - ConfigMap mount for datasource configuration at `/etc/grafana/provisioning/datasources/`
 
 **Prerequisites (not included in template):**
-```yaml
-# Secret containing Grafana datasource YAML files must exist
-# Example secret structure:
-apiVersion: v1
-kind: Secret  
-metadata:
-  name: prometheus-datasources
-type: Opaque
-stringData:
-  datasources.yaml: |
-    apiVersion: 1
-    prune: true
-    datasources:
-      - name: "prod-prometheus"
-        type: "prometheus" 
-        url: "https://prometheus-prod.example.com"
-        jsonData:
-          httpHeaderName1: "Authorization"
-        secureJsonData:
-          httpHeaderValue1: "Bearer <token>"
-      - name: "staging-prometheus" 
-        type: "prometheus"
-        url: "https://prometheus-staging.example.com"
-        # ... additional prometheus datasources
-      - name: "loki-logs"
-        type: "loki"  # Will be ignored by MCP server
-        # ... loki configuration
-```
+- **Secret requirement**: OpenShift Secret containing Grafana datasource YAML files
+- **Secret name**: Must be referenced in template for volume mounting
+- **Secret type**: Opaque with `stringData.datasources.yaml` key
+- **Content format**: Standard Grafana datasource YAML with prometheus and other datasources
+- **Mixed datasources**: Can include non-prometheus datasources (will be filtered out)
+- **Authentication**: Must include Bearer tokens in `secureJsonData.httpHeaderValue1`
 
 ## README.md Requirements
 
@@ -509,49 +364,18 @@ stringData:
 Must include detailed instructions for:
 
 **Container Development:**
-```bash
-# Build and run with podman/docker
-podman build -t promesh-mcp .
-
-# Create sample datasource config
-cat > datasources.yaml << EOF  
-apiVersion: 1
-prune: true
-datasources:
-  - name: "local-prometheus"
-    type: "prometheus" 
-    url: "http://localhost:9090"
-    access: "proxy"
-    editable: false
-  - name: "demo-prometheus"
-    type: "prometheus"
-    url: "https://demo.robustperception.io:9090"
-    access: "proxy"
-    editable: false
-EOF
-
-# Mount local datasource config
-podman run -p 8000:8000 \
-  -v ./datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro \
-  promesh-mcp
-
-# Test FastMCP server (requires MCP client)
-# The server uses streamable HTTP transport for MCP protocol
-```
+- **Multi-stage build**: Support `podman build --target test` for test-only builds
+- **Production build**: Support `podman build --target prod` for production images
+- **Full build**: Default `podman build .` runs tests and creates production image
+- **Configuration**: Mount datasource YAML at `/etc/grafana/provisioning/datasources/datasources.yaml`
+- **Port mapping**: Expose ports 8000 (MCP) and 8080 (health/metrics)
+- **Sample config**: Provide example datasource YAML for local development
+- **Transport**: Uses FastMCP streamable HTTP transport for MCP protocol
 
 **Development Environment:**
-```bash
-# Setup with uv
-uv sync
-
-# Use Makefile commands
-make lint
-make test
-make run
-
-# Or run directly
-PYTHONPATH=. uv run ruff check --fix
-PYTHONPATH=. uv run pytest --cov --cov-report=html
-uv run python -m promesh_mcp
-# Correct way: uv run python -m promesh_mcp
-```
+- **Setup**: Use `uv sync` for dependency installation
+- **Makefile support**: Provide `make lint`, `make test`, `make run` commands
+- **Direct execution**: Support `uv run python -m promesh_mcp` for module execution
+- **Testing**: Use `uv run pytest --cov --cov-report=html` for coverage reports
+- **Linting**: Use `uv run ruff check --fix` for code formatting and linting
+- **Environment**: Set `PYTHONPATH=.` for proper module resolution in development

@@ -1,19 +1,66 @@
-FROM python:3.11-slim
+# Multi-stage Dockerfile for promesh-mcp
+# Uses Red Hat UBI as base image with Python
+
+# Base stage with Red Hat UBI Python image
+FROM registry.redhat.io/ubi9/python-312:9.6-1753200829@sha256:95ec8d3ee9f875da011639213fd254256c29bc58861ac0b11f290a291fa04435 AS base
 
 # Set working directory
 WORKDIR /app
 
-# Install uv first (separate layer for better caching)
-RUN pip install --no-cache-dir uv
+# Install uv for dependency management
+COPY --from=ghcr.io/astral-sh/uv:0.7.21@sha256:a64333b61f96312df88eafce95121b017cbff72033ab2dbc6398edb4f24a75dd /uv /bin/uv
 
-# Copy dependency files and install dependencies
+# Python and UV related variables
+ENV \
+    # compile bytecode for faster startup
+    UV_COMPILE_BYTECODE="true" \
+    # disable uv cache. it doesn't make sense in a container
+    UV_NO_CACHE=true \
+    UV_NO_PROGRESS=true \
+    VIRTUAL_ENV="/app/.venv" \
+    PATH="/app/.venv/bin:${PATH}"
+
+# Builder stage for installing dependencies
+FROM base AS builder
+
+# Copy dependency files
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev
 
-# Copy application code
-COPY . .
+# Test lock file is up to date
+RUN uv lock --locked
 
-# OpenShift will handle user security automatically
+# Install dependencies (excluding dev dependencies)
+RUN uv sync --frozen --no-group dev --no-install-project --python /usr/bin/python3.12
+
+# Copy source code
+COPY README.md ./
+COPY promesh_mcp ./promesh_mcp
+
+# Sync the project
+RUN uv sync --frozen --no-group dev
+
+# Test stage - runs the test suite
+FROM builder AS test
+
+# Install test dependencies
+RUN uv sync --frozen
+
+# Copy test files
+COPY tests ./tests
+
+# Run tests
+RUN PYTHONPATH=. uv run pytest --cov --cov-report=html --cov-report=term
+
+# Production stage - final runtime image
+FROM base AS prod
+
+# Copy the virtual environment with dependencies from builder
+COPY --from=builder /app/.venv /app/.venv
+
+# Copy application source and project files
+COPY --from=builder /app/promesh_mcp ./promesh_mcp
+COPY --from=builder /app/README.md ./
+COPY --from=builder /app/pyproject.toml ./
 
 # Expose ports
 EXPOSE 8000 8080

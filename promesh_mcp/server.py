@@ -3,9 +3,6 @@
 
 import asyncio
 import json
-
-# Configure structured logging
-import logging
 import re
 import time
 from collections import defaultdict
@@ -19,33 +16,11 @@ from mcp.server.fastmcp import FastMCP
 
 from .client import get_prometheus_client
 from .config import get_config_loader
+from .logging import configure_logging, get_uvicorn_log_config
 from .monitoring import start_health_metrics_server
 
-# Configure logging levels for production use
-logging.getLogger("fastmcp").setLevel(logging.INFO)  # Basic FastMCP info
-logging.getLogger("mcp").setLevel(logging.INFO)  # Basic MCP info
-logging.getLogger("uvicorn.access").setLevel(
-    logging.INFO
-)  # HTTP access logs for debugging
-logging.getLogger("uvicorn").setLevel(logging.WARNING)  # Reduce uvicorn noise
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
-structlog.configure(
-    processors=[
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.JSONRenderer(),
-    ],
-    wrapper_class=structlog.stdlib.BoundLogger,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
+# Configure logging
+configure_logging()
 logger = structlog.get_logger()
 
 
@@ -90,7 +65,6 @@ def mcp_access_log(tool_name: str) -> Callable:
             # Log the request start
             logger.info(
                 f"MCP tool called: {tool_name}",
-                level="INFO",
                 tool=tool_name,
                 datasource=datasource_id,
                 request_id=id(args),  # Simple request ID
@@ -104,7 +78,6 @@ def mcp_access_log(tool_name: str) -> Callable:
                 # Log successful completion
                 logger.info(
                     f"MCP tool completed: {tool_name}",
-                    level="INFO",
                     tool=tool_name,
                     datasource=datasource_id,
                     duration_ms=duration_ms,
@@ -125,7 +98,6 @@ def mcp_access_log(tool_name: str) -> Callable:
                 # Log error
                 logger.error(
                     f"MCP tool failed: {tool_name}",
-                    level="ERROR",
                     tool=tool_name,
                     datasource=datasource_id,
                     duration_ms=duration_ms,
@@ -151,7 +123,6 @@ def mcp_access_log(tool_name: str) -> Callable:
             # Log the request start
             logger.info(
                 f"MCP tool called: {tool_name}",
-                level="INFO",
                 tool=tool_name,
                 datasource=datasource_id,
                 request_id=id(args),  # Simple request ID
@@ -165,7 +136,6 @@ def mcp_access_log(tool_name: str) -> Callable:
                 # Log successful completion
                 logger.info(
                     f"MCP tool completed: {tool_name}",
-                    level="INFO",
                     tool=tool_name,
                     datasource=datasource_id,
                     duration_ms=duration_ms,
@@ -186,7 +156,6 @@ def mcp_access_log(tool_name: str) -> Callable:
                 # Log error
                 logger.error(
                     f"MCP tool failed: {tool_name}",
-                    level="ERROR",
                     tool=tool_name,
                     datasource=datasource_id,
                     duration_ms=duration_ms,
@@ -214,12 +183,11 @@ def mcp_access_log(tool_name: str) -> Callable:
 def initialize_server() -> None:
     """Initialize the server with configuration."""
     global config_loader
-    logger.info("Initializing Promesh MCP server", level="INFO")
+    logger.info("Initializing Promesh MCP server")
     config_loader = get_config_loader()
     config_loader.load_datasources()
     logger.info(
         f"Loaded {len(config_loader.datasources)} datasources",
-        level="INFO",
         datasource_count=len(config_loader.datasources),
     )
 
@@ -228,15 +196,12 @@ def initialize_server() -> None:
     # Log first few datasources as examples, not all of them
     sample_datasources = list(config_loader.datasources.items())[:3]
     for name, ds in sample_datasources:
-        logger.info(
-            f"Datasource example: {name}", level="INFO", datasource=name, url=ds.url
-        )
+        logger.info(f"Datasource example: {name}", datasource=name, url=ds.url)
     if len(config_loader.datasources) > 3:
         logger.info(
             f"... and {len(config_loader.datasources) - 3} more datasources",
-            level="INFO",
         )
-    logger.info("Server initialization complete", level="INFO")
+    logger.info("Server initialization complete")
 
 
 def format_tool_response(
@@ -590,7 +555,6 @@ def main() -> None:
     # Create the ASGI app from FastMCP
     asgi_app = app.streamable_http_app()
 
-    # Run uvicorn directly with graceful shutdown timeout
     try:
         uvicorn.run(
             asgi_app,
@@ -598,6 +562,7 @@ def main() -> None:
             port=port,
             timeout_graceful_shutdown=timeout_graceful_shutdown,
             log_level="info",
+            log_config=get_uvicorn_log_config(),
         )
     except KeyboardInterrupt:
         logger.info("Shutting down gracefully...")

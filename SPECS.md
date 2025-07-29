@@ -350,7 +350,7 @@ def query_instant(datasource_id: str, promql: str, time: str = None) -> dict:
 - **JSON format**: All logs in structured JSON for parsing
 - **Access logging**: Track all MCP tool calls with timing and status
 - **Error tracking**: Detailed error logging with error types and context
-- **Noise reduction**: Suppress verbose third-party library logs
+- **INFO level default**: All loggers (FastMCP, MCP, Uvicorn) use INFO level for visibility
 
 **Required log fields:**
 - `level`: INFO, ERROR, WARNING
@@ -372,10 +372,11 @@ def query_instant(datasource_id: str, promql: str, time: str = None) -> dict:
 import structlog
 import time
 
-# Configure structured logging with noise suppression
-logging.getLogger("fastmcp").setLevel(logging.WARNING)
-logging.getLogger("mcp").setLevel(logging.WARNING)
-logging.getLogger("uvicorn").setLevel(logging.WARNING)
+# Configure structured logging with INFO level for visibility
+logging.getLogger("fastmcp").setLevel(logging.INFO)
+logging.getLogger("mcp").setLevel(logging.INFO)
+logging.getLogger("uvicorn").setLevel(logging.INFO)
+logging.getLogger("uvicorn.access").setLevel(logging.INFO)  # Keep access logs visible
 
 # Access logging decorator for all MCP tools
 def mcp_access_log(tool_name: str) -> Callable:

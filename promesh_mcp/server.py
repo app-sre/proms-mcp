@@ -1,0 +1,610 @@
+#!/usr/bin/env python3
+"""Lean Promesh MCP Server using FastMCP."""
+
+import asyncio
+import json
+
+# Configure structured logging
+import logging
+import re
+import time
+from collections import defaultdict
+from collections.abc import Callable
+from datetime import UTC
+from functools import wraps
+from typing import Any
+
+import structlog
+from mcp.server.fastmcp import FastMCP
+
+from .client import get_prometheus_client
+from .config import get_config_loader
+from .monitoring import start_health_metrics_server
+
+# Configure logging levels for production use
+logging.getLogger("fastmcp").setLevel(logging.INFO)  # Basic FastMCP info
+logging.getLogger("mcp").setLevel(logging.INFO)  # Basic MCP info
+logging.getLogger("uvicorn.access").setLevel(
+    logging.INFO
+)  # HTTP access logs for debugging
+logging.getLogger("uvicorn").setLevel(logging.WARNING)  # Reduce uvicorn noise
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer(),
+    ],
+    wrapper_class=structlog.stdlib.BoundLogger,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger()
+
+
+# Initialize FastMCP server
+app = FastMCP(
+    name="promesh-mcp",
+    instructions="A lean MCP server providing access to multiple Prometheus instances for metrics analysis and SRE operations.",
+)
+
+# Global readiness state for graceful shutdown
+server_ready = True
+
+# Global config loader
+config_loader = None
+
+# Prometheus metrics collection
+metrics_data: dict[str, Any] = {
+    "tool_requests_total": defaultdict(
+        lambda: defaultdict(int)
+    ),  # tool -> status -> count
+    "tool_request_durations": defaultdict(list),  # tool -> [duration_ms]
+    "server_requests_total": defaultdict(
+        lambda: defaultdict(int)
+    ),  # method -> endpoint -> count
+    "datasources_configured": 0,
+    "connected_clients": 0,  # Track active connections
+    "server_start_time": time.time(),
+}
+
+
+def mcp_access_log(tool_name: str) -> Callable:
+    """Decorator to add access logging to MCP tools."""
+
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+            start_time = time.time()
+
+            # Extract datasource_id if present in kwargs
+            datasource_id = kwargs.get("datasource_id", "N/A")
+
+            # Log the request start
+            logger.info(
+                f"MCP tool called: {tool_name}",
+                level="INFO",
+                tool=tool_name,
+                datasource=datasource_id,
+                request_id=id(args),  # Simple request ID
+            )
+
+            try:
+                result = await func(*args, **kwargs)
+                duration = time.time() - start_time
+                duration_ms = round(duration * 1000, 2)
+
+                # Log successful completion
+                logger.info(
+                    f"MCP tool completed: {tool_name}",
+                    level="INFO",
+                    tool=tool_name,
+                    datasource=datasource_id,
+                    duration_ms=duration_ms,
+                    status="success",
+                    request_id=id(args),
+                )
+
+                # Update metrics
+                metrics_data["tool_requests_total"][tool_name]["success"] += 1
+                metrics_data["tool_request_durations"][tool_name].append(duration_ms)
+
+                return result
+
+            except Exception as e:
+                duration = time.time() - start_time
+                duration_ms = round(duration * 1000, 2)
+
+                # Log error
+                logger.error(
+                    f"MCP tool failed: {tool_name}",
+                    level="ERROR",
+                    tool=tool_name,
+                    datasource=datasource_id,
+                    duration_ms=duration_ms,
+                    status="error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    request_id=id(args),
+                )
+
+                # Update metrics
+                metrics_data["tool_requests_total"][tool_name]["error"] += 1
+                metrics_data["tool_request_durations"][tool_name].append(duration_ms)
+
+                raise
+
+        @wraps(func)
+        def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+            start_time = time.time()
+
+            # Extract datasource_id if present in kwargs
+            datasource_id = kwargs.get("datasource_id", "N/A")
+
+            # Log the request start
+            logger.info(
+                f"MCP tool called: {tool_name}",
+                level="INFO",
+                tool=tool_name,
+                datasource=datasource_id,
+                request_id=id(args),  # Simple request ID
+            )
+
+            try:
+                result = func(*args, **kwargs)
+                duration = time.time() - start_time
+                duration_ms = round(duration * 1000, 2)
+
+                # Log successful completion
+                logger.info(
+                    f"MCP tool completed: {tool_name}",
+                    level="INFO",
+                    tool=tool_name,
+                    datasource=datasource_id,
+                    duration_ms=duration_ms,
+                    status="success",
+                    request_id=id(args),
+                )
+
+                # Update metrics
+                metrics_data["tool_requests_total"][tool_name]["success"] += 1
+                metrics_data["tool_request_durations"][tool_name].append(duration_ms)
+
+                return result
+
+            except Exception as e:
+                duration = time.time() - start_time
+                duration_ms = round(duration * 1000, 2)
+
+                # Log error
+                logger.error(
+                    f"MCP tool failed: {tool_name}",
+                    level="ERROR",
+                    tool=tool_name,
+                    datasource=datasource_id,
+                    duration_ms=duration_ms,
+                    status="error",
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    request_id=id(args),
+                )
+
+                # Update metrics
+                metrics_data["tool_requests_total"][tool_name]["error"] += 1
+                metrics_data["tool_request_durations"][tool_name].append(duration_ms)
+
+                raise
+
+        # Return appropriate wrapper based on whether function is async
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
+
+    return decorator
+
+
+def initialize_server() -> None:
+    """Initialize the server with configuration."""
+    global config_loader
+    logger.info("Initializing Promesh MCP server", level="INFO")
+    config_loader = get_config_loader()
+    config_loader.load_datasources()
+    logger.info(
+        f"Loaded {len(config_loader.datasources)} datasources",
+        level="INFO",
+        datasource_count=len(config_loader.datasources),
+    )
+
+    # Update metrics
+    metrics_data["datasources_configured"] = len(config_loader.datasources)
+    # Log first few datasources as examples, not all of them
+    sample_datasources = list(config_loader.datasources.items())[:3]
+    for name, ds in sample_datasources:
+        logger.info(
+            f"Datasource example: {name}", level="INFO", datasource=name, url=ds.url
+        )
+    if len(config_loader.datasources) > 3:
+        logger.info(
+            f"... and {len(config_loader.datasources) - 3} more datasources",
+            level="INFO",
+        )
+    logger.info("Server initialization complete", level="INFO")
+
+
+def format_tool_response(
+    data: Any,
+    status: str = "success",
+    error: str | None = None,
+    datasource: str | None = None,
+    query: str | None = None,
+) -> str:
+    """Format tool response as JSON string."""
+    from datetime import datetime
+
+    response = {
+        "status": status,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+    if datasource:
+        response["datasource"] = datasource
+    if query:
+        response["query"] = query
+    if status == "success":
+        response["data"] = data
+    else:
+        response["error"] = error or "Unknown error"
+
+    return json.dumps(response, indent=2)
+
+
+def tool_error_handler(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator to handle common tool errors and server initialization checks."""
+
+    @wraps(func)
+    async def async_wrapper(*args: Any, **kwargs: Any) -> str:
+        try:
+            if not config_loader:
+                return format_tool_response(None, "error", "Server not initialized")
+            return await func(*args, **kwargs)  # type: ignore[no-any-return]
+        except Exception as e:
+            logger.error(f"Error in {func.__name__}", error=str(e), **kwargs)
+            return format_tool_response(
+                None, "error", f"Failed to execute {func.__name__}: {str(e)}"
+            )
+
+    @wraps(func)
+    def sync_wrapper(*args: Any, **kwargs: Any) -> str:
+        try:
+            if not config_loader:
+                return format_tool_response(None, "error", "Server not initialized")
+            return func(*args, **kwargs)  # type: ignore[no-any-return]
+        except Exception as e:
+            logger.error(f"Error in {func.__name__}", error=str(e), **kwargs)
+            return format_tool_response(
+                None, "error", f"Failed to execute {func.__name__}: {str(e)}"
+            )
+
+    # Return appropriate wrapper based on whether function is async
+    if asyncio.iscoroutinefunction(func):
+        return async_wrapper
+    else:
+        return sync_wrapper
+
+
+def validate_datasource(datasource_id: str) -> tuple[Any, str | None]:
+    """Validate datasource exists and return it or error message."""
+    if not config_loader:
+        return None, "Server not initialized"
+    datasource = config_loader.get_datasource(datasource_id)
+    if not datasource:
+        return None, f"Datasource not found: {datasource_id}"
+    return datasource, None
+
+
+# Discovery Tools
+
+
+@app.tool()
+@mcp_access_log("list_datasources")
+@tool_error_handler
+def list_datasources() -> str:
+    """List all available Prometheus datasources.
+
+    Returns:
+        JSON string with list of configured Prometheus datasources
+    """
+    if not config_loader:
+        return format_tool_response(None, "error", "Server not initialized")
+    datasources = [
+        {"id": name, "name": name, "url": ds.url, "type": "prometheus"}
+        for name, ds in config_loader.datasources.items()
+    ]
+    return format_tool_response(datasources)
+
+
+@app.tool()
+@mcp_access_log("list_metrics")
+@tool_error_handler
+async def list_metrics(datasource_id: str) -> str:
+    """Get all available metric names from a datasource.
+
+    Args:
+        datasource_id: ID of the Prometheus datasource
+
+    Returns:
+        JSON string with list of metric names
+    """
+    datasource, error = validate_datasource(datasource_id)
+    if error:
+        return format_tool_response(None, "error", error)
+
+    async with get_prometheus_client(datasource) as client:
+        result = await client.get_metric_names()
+
+    if result["status"] == "success":
+        metrics = result["data"].get("data", [])
+        return format_tool_response(metrics, datasource=datasource_id)
+    else:
+        return format_tool_response(
+            None, "error", result["error"], datasource=datasource_id
+        )
+
+
+@app.tool()
+@mcp_access_log("get_metric_metadata")
+@tool_error_handler
+async def get_metric_metadata(datasource_id: str, metric_name: str) -> str:
+    """Get metadata for a specific metric.
+
+    Args:
+        datasource_id: ID of the Prometheus datasource
+        metric_name: Name of the metric to get metadata for
+
+    Returns:
+        JSON string with metric metadata
+    """
+    datasource, error = validate_datasource(datasource_id)
+    if error:
+        return format_tool_response(None, "error", error)
+
+    async with get_prometheus_client(datasource) as client:
+        result = await client.get_metric_metadata(metric_name)
+
+    if result["status"] == "success":
+        return format_tool_response(result["data"], datasource=datasource_id)
+    else:
+        return format_tool_response(
+            None, "error", result["error"], datasource=datasource_id
+        )
+
+
+# Query Tools
+
+
+@app.tool()
+@mcp_access_log("query_instant")
+@tool_error_handler
+async def query_instant(
+    datasource_id: str, promql: str, time: str | None = None
+) -> str:
+    """Execute instant PromQL query.
+
+    Args:
+        datasource_id: ID of the Prometheus datasource
+        promql: PromQL query string
+        time: Optional timestamp (RFC3339 or Unix timestamp)
+
+    Returns:
+        JSON string with query results
+    """
+    datasource, error = validate_datasource(datasource_id)
+    if error:
+        return format_tool_response(None, "error", error)
+
+    async with get_prometheus_client(datasource) as client:
+        result = await client.query_instant(promql, time)
+
+    if result["status"] == "success":
+        return format_tool_response(
+            result["data"], datasource=datasource_id, query=promql
+        )
+    else:
+        return format_tool_response(
+            None, "error", result["error"], datasource=datasource_id, query=promql
+        )
+
+
+@app.tool()
+@mcp_access_log("query_range")
+@tool_error_handler
+async def query_range(
+    datasource_id: str, promql: str, start: str, end: str, step: str
+) -> str:
+    """Execute range PromQL query.
+
+    Args:
+        datasource_id: ID of the Prometheus datasource
+        promql: PromQL query string
+        start: Start timestamp (RFC3339 or Unix timestamp)
+        end: End timestamp (RFC3339 or Unix timestamp)
+        step: Step duration (e.g., "30s", "1m", "5m")
+
+    Returns:
+        JSON string with query results
+    """
+    datasource, error = validate_datasource(datasource_id)
+    if error:
+        return format_tool_response(None, "error", error)
+
+    async with get_prometheus_client(datasource) as client:
+        result = await client.query_range(promql, start, end, step)
+
+    if result["status"] == "success":
+        return format_tool_response(
+            result["data"], datasource=datasource_id, query=promql
+        )
+    else:
+        return format_tool_response(
+            None, "error", result["error"], datasource=datasource_id, query=promql
+        )
+
+
+# Analysis Helper Tools
+
+
+@app.tool()
+@mcp_access_log("get_metric_labels")
+@tool_error_handler
+async def get_metric_labels(datasource_id: str, metric_name: str) -> str:
+    """Get all label names for a specific metric.
+
+    Args:
+        datasource_id: ID of the Prometheus datasource
+        metric_name: Name of the metric
+
+    Returns:
+        JSON string with list of label names
+    """
+    datasource, error = validate_datasource(datasource_id)
+    if error:
+        return format_tool_response(None, "error", error)
+
+    async with get_prometheus_client(datasource) as client:
+        result = await client.get_series(f"{metric_name}")
+
+    if result["status"] == "success":
+        # Extract unique label names from series
+        label_names = set()
+        for series in result["data"].get("data", []):
+            label_names.update(series.keys())
+        # Remove __name__ as it's the metric name itself
+        label_names.discard("__name__")
+
+        return format_tool_response(sorted(list(label_names)), datasource=datasource_id)
+    else:
+        return format_tool_response(
+            None, "error", result["error"], datasource=datasource_id
+        )
+
+
+@app.tool()
+@mcp_access_log("get_label_values")
+@tool_error_handler
+async def get_label_values(
+    datasource_id: str, label_name: str, metric_name: str | None = None
+) -> str:
+    """Get all values for a specific label.
+
+    Args:
+        datasource_id: ID of the Prometheus datasource
+        label_name: Name of the label
+        metric_name: Optional metric name to filter by
+
+    Returns:
+        JSON string with list of label values
+    """
+    datasource, error = validate_datasource(datasource_id)
+    if error:
+        return format_tool_response(None, "error", error)
+
+    async with get_prometheus_client(datasource) as client:
+        result = await client.get_label_values(label_name)
+
+    if result["status"] == "success":
+        values = result["data"].get("data", [])
+        return format_tool_response(values, datasource=datasource_id)
+    else:
+        return format_tool_response(
+            None, "error", result["error"], datasource=datasource_id
+        )
+
+
+@app.tool()
+@mcp_access_log("find_metrics_by_pattern")
+@tool_error_handler
+async def find_metrics_by_pattern(datasource_id: str, pattern: str) -> str:
+    """Find metrics matching a regex pattern.
+
+    Args:
+        datasource_id: ID of the Prometheus datasource
+        pattern: Regex pattern to match against metric names
+
+    Returns:
+        JSON string with list of matching metric names
+    """
+    datasource, error = validate_datasource(datasource_id)
+    if error:
+        return format_tool_response(None, "error", error)
+
+    # Get all metrics first
+    async with get_prometheus_client(datasource) as client:
+        result = await client.get_metric_names()
+
+    if result["status"] != "success":
+        return format_tool_response(
+            None, "error", result["error"], datasource=datasource_id
+        )
+
+    # Filter by pattern
+    all_metrics = result["data"].get("data", [])
+    try:
+        regex = re.compile(pattern)
+        matching_metrics = [metric for metric in all_metrics if regex.search(metric)]
+        return format_tool_response(matching_metrics, datasource=datasource_id)
+    except re.error as e:
+        return format_tool_response(
+            None, "error", f"Invalid regex pattern: {str(e)}", datasource=datasource_id
+        )
+
+
+# MCP Tools Implementation
+
+
+# Initialize the server on module load
+initialize_server()
+
+
+def main() -> None:
+    """Main entry point for the server."""
+    import os
+
+    import uvicorn
+
+    # Start health and metrics server (daemon thread will exit with main process)
+    start_health_metrics_server(metrics_data)
+
+    # Get configuration from environment
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    timeout_graceful_shutdown = int(os.getenv("SHUTDOWN_TIMEOUT_SECONDS", "8"))
+
+    # Create the ASGI app from FastMCP
+    asgi_app = app.streamable_http_app()
+
+    # Run uvicorn directly with graceful shutdown timeout
+    try:
+        uvicorn.run(
+            asgi_app,
+            host=host,
+            port=port,
+            timeout_graceful_shutdown=timeout_graceful_shutdown,
+            log_level="info",
+        )
+    except KeyboardInterrupt:
+        logger.info("Shutting down gracefully...")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        raise
+
+
+if __name__ == "__main__":
+    main()

@@ -232,6 +232,154 @@ class TestConfigLoader:
         assert "updated-ds" in datasources
         assert "initial-ds" not in datasources
 
+    def test_parse_datasource_with_missing_required_fields(self) -> None:
+        """Test parsing datasource with missing required fields."""
+        # Test with missing name
+        content = {
+            "apiVersion": 1,
+            "datasources": [
+                {
+                    "type": "prometheus",
+                    "url": "https://prometheus.example.com",
+                }
+            ],
+        }
+
+        self.create_test_yaml(content)
+        datasources = self.config_loader.load_datasources()
+        # Should skip invalid datasource
+        assert len(datasources) == 0
+
+        # Test with missing url
+        content = {
+            "apiVersion": 1,
+            "datasources": [
+                {
+                    "name": "test-prometheus",
+                    "type": "prometheus",
+                }
+            ],
+        }
+
+        self.create_test_yaml(content)
+        datasources = self.config_loader.load_datasources()
+        # Should skip invalid datasource
+        assert len(datasources) == 0
+
+    def test_parse_datasource_with_partial_auth_config(self) -> None:
+        """Test parsing datasource with partial auth configuration."""
+        # Test with only httpHeaderName1 (missing httpHeaderValue1)
+        content = {
+            "apiVersion": 1,
+            "datasources": [
+                {
+                    "name": "partial-auth-ds",
+                    "type": "prometheus",
+                    "url": "https://prometheus.example.com",
+                    "jsonData": {"httpHeaderName1": "Authorization"},
+                    # Missing secureJsonData
+                }
+            ],
+        }
+
+        self.create_test_yaml(content)
+        # Clear previous datasources
+        self.config_loader.datasources.clear()
+        datasources = self.config_loader.load_datasources()
+
+        assert len(datasources) == 1
+        ds = datasources["partial-auth-ds"]
+        assert ds.auth_header_name == "Authorization"
+        assert ds.auth_header_value is None  # Should be None when missing
+
+        # Test with only httpHeaderValue1 (missing httpHeaderName1)
+        content = {
+            "apiVersion": 1,
+            "datasources": [
+                {
+                    "name": "partial-auth-ds2",
+                    "type": "prometheus",
+                    "url": "https://prometheus.example.com",
+                    "secureJsonData": {"httpHeaderValue1": "Bearer token"},
+                    # Missing jsonData
+                }
+            ],
+        }
+
+        self.create_test_yaml(content)
+        # Clear previous datasources
+        self.config_loader.datasources.clear()
+        datasources = self.config_loader.load_datasources()
+
+        assert len(datasources) == 1
+        ds = datasources["partial-auth-ds2"]
+        assert ds.auth_header_name is None  # Should be None when missing
+        assert ds.auth_header_value == "Bearer token"
+
+    def test_load_datasources_with_complex_structure(self) -> None:
+        """Test loading datasources with complex YAML structure."""
+        content = {
+            "apiVersion": 1,
+            "prune": True,
+            "datasources": [
+                {
+                    "name": "complex-prometheus",
+                    "type": "prometheus",
+                    "url": "https://prometheus-complex.example.com",
+                    "access": "proxy",
+                    "editable": False,
+                    "orgId": 1,
+                    "version": 1,
+                    "jsonData": {
+                        "httpHeaderName1": "Authorization",
+                        "httpMethod": "GET",
+                        "timeInterval": "30s",
+                        "queryTimeout": "60s",
+                        "other_config": "ignored",
+                    },
+                    "secureJsonData": {
+                        "httpHeaderValue1": "Bearer complex-token",
+                        "other_secret": "ignored",
+                    },
+                    "extra_field": "should_be_ignored",
+                }
+            ],
+        }
+
+        self.create_test_yaml(content)
+        datasources = self.config_loader.load_datasources()
+
+        assert len(datasources) == 1
+        ds = datasources["complex-prometheus"]
+        assert ds.name == "complex-prometheus"
+        assert ds.url == "https://prometheus-complex.example.com"
+        assert ds.auth_header_name == "Authorization"
+        assert ds.auth_header_value == "Bearer complex-token"
+        # Other fields should be ignored - we only extract what we need
+
+    def test_load_datasources_with_empty_auth_sections(self) -> None:
+        """Test loading datasources with empty auth sections."""
+        content = {
+            "apiVersion": 1,
+            "datasources": [
+                {
+                    "name": "empty-auth-ds",
+                    "type": "prometheus",
+                    "url": "https://prometheus.example.com",
+                    "jsonData": {},  # Empty jsonData
+                    "secureJsonData": {},  # Empty secureJsonData
+                }
+            ],
+        }
+
+        self.create_test_yaml(content)
+        datasources = self.config_loader.load_datasources()
+
+        assert len(datasources) == 1
+        ds = datasources["empty-auth-ds"]
+        assert ds.auth_header_name is None
+        assert ds.auth_header_value is None
+
 
 def test_get_config_loader() -> None:
     """Test get_config_loader factory function."""

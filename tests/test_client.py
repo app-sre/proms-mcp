@@ -306,6 +306,148 @@ class TestPrometheusClient:
         # Verify http_client.aclose was called
         # Note: In real usage, this would close the HTTP client
 
+    # NEW TESTS FOR MISSING COVERAGE
+
+    @pytest.mark.asyncio
+    async def test_get_metric_names_error(self) -> None:
+        """Test get_metric_names with error."""
+        with patch.object(
+            self.client.http_client, "get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Connection error")
+
+            result = await self.client.get_metric_names()
+
+            assert result["status"] == "error"
+            assert "PROMETHEUS_UNAVAILABLE" in result["error"]
+            assert "Connection error" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_get_metric_metadata_error(self) -> None:
+        """Test get_metric_metadata with error."""
+        with patch.object(
+            self.client.http_client, "get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Connection error")
+
+            result = await self.client.get_metric_metadata("up")
+
+            assert result["status"] == "error"
+            assert "PROMETHEUS_UNAVAILABLE" in result["error"]
+            assert "Connection error" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_get_series_error(self) -> None:
+        """Test get_series with error."""
+        with patch.object(
+            self.client.http_client, "get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Connection error")
+
+            result = await self.client.get_series("{up}")
+
+            assert result["status"] == "error"
+            assert "PROMETHEUS_UNAVAILABLE" in result["error"]
+            assert "Connection error" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_get_label_values_error(self) -> None:
+        """Test get_label_values with error."""
+        with patch.object(
+            self.client.http_client, "get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Connection error")
+
+            result = await self.client.get_label_values("job")
+
+            assert result["status"] == "error"
+            assert "PROMETHEUS_UNAVAILABLE" in result["error"]
+            assert "Connection error" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_query_instant_with_time_parameter(self) -> None:
+        """Test instant query with time parameter."""
+        mock_response = Mock()
+        mock_response.json.return_value = {"status": "success", "data": {"result": []}}
+
+        with patch.object(
+            self.client.http_client, "get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.return_value = mock_response
+
+            result = await self.client.query_instant("up", time="2024-01-01T00:00:00Z")
+
+            assert result["status"] == "success"
+            mock_get.assert_called_once()
+            # Verify the time parameter was passed
+            call_args = mock_get.call_args
+            assert call_args[1]["params"]["time"] == "2024-01-01T00:00:00Z"
+
+    @pytest.mark.asyncio
+    async def test_query_instant_general_http_error(self) -> None:
+        """Test instant query with general HTTP error (not 400 or 401)."""
+        mock_response = Mock()
+        mock_response.status_code = 500
+        mock_response.text = "Internal Server Error"
+
+        with patch.object(
+            self.client.http_client, "get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = httpx.HTTPStatusError(
+                "Internal Server Error", request=Mock(), response=mock_response
+            )
+
+            result = await self.client.query_instant("up")
+
+            assert result["status"] == "error"
+            assert "PROMETHEUS_UNAVAILABLE" in result["error"]
+            assert "HTTP 500" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_query_instant_general_exception(self) -> None:
+        """Test instant query with general exception."""
+        with patch.object(
+            self.client.http_client, "get", new_callable=AsyncMock
+        ) as mock_get:
+            mock_get.side_effect = Exception("Network error")
+
+            result = await self.client.query_instant("up")
+
+            assert result["status"] == "error"
+            assert "PROMETHEUS_UNAVAILABLE" in result["error"]
+            assert "Network error" in result["error"]
+
+    @pytest.mark.asyncio
+    async def test_query_range_validation_error(self) -> None:
+        """Test range query with validation error."""
+        result = await self.client.query_range("", "start", "end", "step")
+
+        assert result["status"] == "error"
+        assert "INVALID_QUERY" in result["error"]
+        assert "Query cannot be empty" in result["error"]
+
+    def test_format_response_without_query(self) -> None:
+        """Test response formatting without query parameter."""
+        data = {"status": "success", "data": {"result": []}}
+
+        response = self.client._format_response(data)
+
+        assert response["status"] == "success"
+        assert response["datasource"] == "test-prometheus"
+        assert response["query"] is None
+        assert response["data"] == data
+
+    def test_format_error_without_query(self) -> None:
+        """Test error formatting without query parameter."""
+        error = "Test error message"
+
+        response = self.client._format_error(error)
+
+        assert response["status"] == "error"
+        assert response["datasource"] == "test-prometheus"
+        assert response["query"] is None
+        assert response["error"] == error
+
 
 def test_get_prometheus_client() -> None:
     """Test get_prometheus_client factory function."""

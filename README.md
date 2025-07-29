@@ -383,7 +383,7 @@ make test
 
 5. **Client connection issues (400/406 errors)**
    
-   **400 Bad Request**: Usually occurs when clients (like Cursor) attempt to reconnect immediately after server restart with stale connection state. Wait a few seconds and try reconnecting.
+   **400 Bad Request - "No valid session ID provided"**: This occurs when clients (like Cursor) attempt to reconnect to a restarted MCP server with stale session state. The server is configured with `stateless_http=True` to prevent this issue by not requiring session management for reconnections.
    
    **406 Not Acceptable**: Occurs when the client doesn't send the correct `Accept` headers. MCP over Streamable HTTP requires clients to accept both:
    - `application/json` 

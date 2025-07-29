@@ -25,9 +25,12 @@ logger = structlog.get_logger()
 
 
 # Initialize FastMCP server
+# stateless_http=True prevents "No valid session ID provided" errors when clients
+# like Cursor try to reconnect after server restarts
 app = FastMCP(
     name="promesh-mcp",
     instructions="A lean MCP server providing access to multiple Prometheus instances for metrics analysis and SRE operations.",
+    stateless_http=True,
 )
 
 # Global readiness state for graceful shutdown

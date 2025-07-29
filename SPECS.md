@@ -221,10 +221,11 @@ All tools must return structured data with consistent formatting:
 ## FastMCP Server Implementation
 
 ### MCP Protocol Handling
-- **Transport**: FastMCP streamable HTTP transport
+- **Transport**: FastMCP streamable HTTP transport (stateless mode)
 - **Protocol**: Standard MCP JSON-RPC 2.0 (handled automatically)
 - **Server**: Uvicorn ASGI server
 - **Port**: 8000 (configurable via PORT env var)
+- **Session Management**: Stateless HTTP mode prevents reconnection issues after server restarts
 - **Tools**: Registered using `@app.tool()` decorators
 
 ### Health and Metrics Endpoints

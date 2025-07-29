@@ -373,6 +373,10 @@ async def query_instant(
 
     Returns:
         JSON string with query results
+        
+    Note:
+        When using the time parameter, check your local system's current date/time
+        to ensure queries use appropriate timestamps for meaningful results.
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
@@ -408,6 +412,10 @@ async def query_range(
 
     Returns:
         JSON string with query results
+        
+    Note:
+        Always check your local system's current date/time when constructing
+        start and end timestamps to ensure queries cover the intended time range.
     """
     datasource, error = validate_datasource(datasource_id)
     if error:

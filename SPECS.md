@@ -7,7 +7,7 @@ A lean MCP (Model Context Protocol) server that provides LLM agents with transpa
 
 ### Deployment Environment
 - **Platform**: OpenShift cluster (Kubernetes pod)
-- **Language**: Python 3.12+ (using Red Hat UBI9 Python base image)
+- **Language**: Python 3.11+ (using Red Hat UBI9 Python base image)
 - **Architecture**: Single container, stateless
 - **Configuration**: Grafana datasource YAML files mounted as ConfigMap
 - **Network**: HTTP access (SSL termination handled externally)
@@ -94,7 +94,7 @@ Extract and validate these fields from each prometheus datasource:
 #### 2. Query Tools
 - **query_instant(datasource_id, promql, time?)**: Execute instant PromQL query using `/api/v1/query`
 - **query_range(datasource_id, promql, start, end, step)**: Execute range PromQL query using `/api/v1/query_range`
-- **query_prometheus(datasource_id, promql, start_time?, end_time?)**: Smart wrapper that chooses instant or range based on parameters
+
 
 #### 3. Analysis Helper Tools
 - **get_metric_labels(datasource_id, metric_name)**: Get all label names for a metric using `/api/v1/series`
@@ -179,7 +179,7 @@ This ensures reliable shutdown behavior even with persistent client connections 
 
 ### Dockerfile Requirements
 - **Multi-stage build**: Must include base, builder, test, and production stages
-- **Base image**: Red Hat UBI9 Python 3.12 with specific version tag and SHA digest (no `latest` tags)
+- **Base image**: Red Hat UBI9 Python 3.11+ with specific version tag and SHA digest (no `latest` tags)
 - **Base registry**: Use `registry.redhat.io` for official Red Hat images
 - **Dependency management**: Use `uv` for Python package management
 - **Test integration**: Test stage must run full test suite - build fails if tests fail

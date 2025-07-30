@@ -5,12 +5,12 @@ from unittest.mock import AsyncMock, Mock, patch
 import httpx
 import pytest
 
-from promesh_mcp.client import (
+from proms_mcp.client import (
     PrometheusClient,
     PrometheusClientError,
     get_prometheus_client,
 )
-from promesh_mcp.config import PrometheusDataSource
+from proms_mcp.config import PrometheusDataSource
 
 
 class TestPrometheusClient:

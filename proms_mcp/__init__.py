@@ -1,4 +1,4 @@
-"""Promesh MCP Server Package.
+"""Proms MCP Server Package.
 
 A lean MCP server that provides LLM agents with transparent access to multiple Prometheus instances.
 """

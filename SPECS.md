@@ -1,4 +1,4 @@
-# Promesh MCP Server Specification
+# Proms MCP Server Specification
 
 ## Overview
 A lean MCP (Model Context Protocol) server that provides LLM agents with transparent access to multiple Prometheus instances for metrics analysis and SRE operations.
@@ -185,7 +185,7 @@ This ensures reliable shutdown behavior even with persistent client connections 
 - **Test integration**: Test stage must run full test suite - build fails if tests fail
 - **Production optimization**: Final stage contains only runtime dependencies
 - **Port exposure**: Expose ports 8000 (MCP) and 8080 (health/metrics)
-- **Entry point**: Use `uv run python -m promesh_mcp` as CMD
+- **Entry point**: Use `uv run python -m proms_mcp` as CMD
 
 ### Multi-Stage Build Requirements
 - **Base Image**: Must use Red Hat UBI9 Python with specific version tag and SHA digest (no `latest` tags)
@@ -375,7 +375,7 @@ Must include detailed instructions for:
 **Development Environment:**
 - **Setup**: Use `uv sync` for dependency installation
 - **Makefile support**: Provide `make lint`, `make test`, `make run` commands
-- **Direct execution**: Support `uv run python -m promesh_mcp` for module execution
+- **Direct execution**: Support `uv run python -m proms_mcp` for module execution
 - **Testing**: Use `uv run pytest --cov --cov-report=html` for coverage reports
 - **Linting**: Use `uv run ruff check --fix` for code formatting and linting
 - **Environment**: Set `PYTHONPATH=.` for proper module resolution in development

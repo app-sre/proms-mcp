@@ -7,8 +7,8 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from promesh_mcp.config import PrometheusDataSource
-from promesh_mcp.server import (
+from proms_mcp.config import PrometheusDataSource
+from proms_mcp.server import (
     app,
     format_tool_response,
     initialize_server,
@@ -63,7 +63,7 @@ class TestFastMCPServer:
         """Test server initialization."""
         self.create_test_datasource_config()
 
-        with patch("promesh_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
             mock_config = Mock()
             mock_config.datasources = {
                 "test-prometheus": PrometheusDataSource(
@@ -104,7 +104,7 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_list_datasources_tool(self) -> None:
         """Test the list_datasources tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_config.datasources = {
                 "test-prometheus": Mock(url="https://prometheus.example.com")
             }
@@ -129,11 +129,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_query_instant_tool(self) -> None:
         """Test the query_instant tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -160,11 +160,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_query_range_tool(self) -> None:
         """Test the query_range tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -196,7 +196,7 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_tool_error_handling(self) -> None:
         """Test error handling in tools."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_config.get_datasource.return_value = None  # Datasource not found
 
             result = await app.call_tool(
@@ -240,11 +240,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_list_metrics_tool(self) -> None:
         """Test the list_metrics tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -268,11 +268,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_list_metrics_tool_error(self) -> None:
         """Test the list_metrics tool with error."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -295,11 +295,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_get_metric_metadata_tool(self) -> None:
         """Test the get_metric_metadata tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -323,11 +323,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_get_metric_labels_tool(self) -> None:
         """Test the get_metric_labels tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -368,11 +368,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_get_label_values_tool(self) -> None:
         """Test the get_label_values tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -396,11 +396,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_find_metrics_by_pattern_tool(self) -> None:
         """Test the find_metrics_by_pattern tool."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -428,11 +428,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_find_metrics_by_pattern_invalid_regex(self) -> None:
         """Test find_metrics_by_pattern with invalid regex."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -455,7 +455,7 @@ class TestFastMCPServer:
 
     def test_validate_datasource(self) -> None:
         """Test datasource validation."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
@@ -470,7 +470,7 @@ class TestFastMCPServer:
             assert error is not None and "not found" in error
 
         # Test with no config loader
-        with patch("promesh_mcp.server.config_loader", None):
+        with patch("proms_mcp.server.config_loader", None):
             datasource, error = validate_datasource("test")
             assert datasource is None
             assert error is not None and "not initialized" in error
@@ -521,7 +521,7 @@ class TestFastMCPServer:
         def sync_func_success() -> str:
             return format_tool_response({"result": "success"})
 
-        with patch("promesh_mcp.server.config_loader", Mock()):
+        with patch("proms_mcp.server.config_loader", Mock()):
             result = sync_func_success()
             data = json.loads(result)
             assert data["status"] == "success"
@@ -531,7 +531,7 @@ class TestFastMCPServer:
         def sync_func_error() -> str:
             raise ValueError("Test error")
 
-        with patch("promesh_mcp.server.config_loader", Mock()):
+        with patch("proms_mcp.server.config_loader", Mock()):
             result = sync_func_error()
             data = json.loads(result)
             assert data["status"] == "error"
@@ -542,7 +542,7 @@ class TestFastMCPServer:
         def sync_func_no_config() -> str:
             return format_tool_response({"result": "success"})
 
-        with patch("promesh_mcp.server.config_loader", None):
+        with patch("proms_mcp.server.config_loader", None):
             result = sync_func_no_config()
             data = json.loads(result)
             assert data["status"] == "error"
@@ -555,7 +555,7 @@ class TestFastMCPIntegration:
     @pytest.mark.asyncio
     async def test_server_can_start(self) -> None:
         """Test that the server can be initialized without errors."""
-        with patch("promesh_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
             mock_config = Mock()
             mock_config.datasources = {}
             mock_get_config.return_value = mock_config
@@ -571,21 +571,19 @@ class TestFastMCPIntegration:
         """Test that the server is configured for stateless HTTP."""
         # Verify that the FastMCP app is configured with stateless_http=True
         # This prevents session-related errors on reconnection
-        from promesh_mcp.server import app
-        
+        from proms_mcp.server import app
+
         # The stateless_http configuration should be enabled
         # We can verify the app object exists and is properly configured
         assert app is not None
-        assert app.name == "promesh-mcp"
+        assert app.name == "proms-mcp"
         # The stateless_http=True configuration prevents reconnection issues
 
     def test_server_main_function(self) -> None:
         """Test the main server entry point."""
-        from promesh_mcp.server import main
+        from proms_mcp.server import main
 
-        with patch(
-            "promesh_mcp.server.start_health_metrics_server"
-        ) as mock_start_health:
+        with patch("proms_mcp.server.start_health_metrics_server") as mock_start_health:
             with patch("uvicorn.run") as mock_uvicorn_run:
                 with patch.dict("os.environ", {"PORT": "9000", "HOST": "0.0.0.0"}):
                     main()
@@ -600,9 +598,9 @@ class TestFastMCPIntegration:
 
     def test_server_main_with_exception(self) -> None:
         """Test server main function handles exceptions."""
-        from promesh_mcp.server import main
+        from proms_mcp.server import main
 
-        with patch("promesh_mcp.server.start_health_metrics_server"):
+        with patch("proms_mcp.server.start_health_metrics_server"):
             with patch("uvicorn.run") as mock_uvicorn_run:
                 mock_uvicorn_run.side_effect = Exception("Server error")
 
@@ -611,9 +609,9 @@ class TestFastMCPIntegration:
 
     def test_server_main_keyboard_interrupt(self) -> None:
         """Test server main function handles KeyboardInterrupt."""
-        from promesh_mcp.server import main
+        from proms_mcp.server import main
 
-        with patch("promesh_mcp.server.start_health_metrics_server"):
+        with patch("proms_mcp.server.start_health_metrics_server"):
             with patch("uvicorn.run") as mock_uvicorn_run:
                 mock_uvicorn_run.side_effect = KeyboardInterrupt()
 
@@ -622,7 +620,7 @@ class TestFastMCPIntegration:
 
     def test_server_initialization_with_datasources(self) -> None:
         """Test server initialization with multiple datasources."""
-        with patch("promesh_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
             mock_config = Mock()
             mock_config.datasources = {
                 "ds1": PrometheusDataSource(name="ds1", url="http://prom1:9090"),
@@ -632,7 +630,7 @@ class TestFastMCPIntegration:
             mock_get_config.return_value = mock_config
 
             # Clear any existing metrics
-            from promesh_mcp.server import metrics_data
+            from proms_mcp.server import metrics_data
 
             metrics_data["datasources_configured"] = 0
 
@@ -644,7 +642,7 @@ class TestFastMCPIntegration:
 
     def test_server_initialization_config_loading_failure(self) -> None:
         """Test server handles config loading failures gracefully."""
-        with patch("promesh_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
             mock_config = Mock()
             mock_config.load_datasources.side_effect = Exception("Config load failed")
             mock_config.datasources = {}
@@ -664,11 +662,9 @@ class TestFastMCPIntegration:
 
     def test_server_main_with_default_environment(self) -> None:
         """Test server main with default environment variables."""
-        from promesh_mcp.server import main
+        from proms_mcp.server import main
 
-        with patch(
-            "promesh_mcp.server.start_health_metrics_server"
-        ) as mock_start_health:
+        with patch("proms_mcp.server.start_health_metrics_server") as mock_start_health:
             with patch("uvicorn.run") as mock_uvicorn_run:
                 # Clear environment to test defaults
                 with patch.dict("os.environ", {}, clear=True):
@@ -685,9 +681,9 @@ class TestFastMCPIntegration:
 
     def test_server_main_with_custom_shutdown_timeout(self) -> None:
         """Test server main with custom shutdown timeout."""
-        from promesh_mcp.server import main
+        from proms_mcp.server import main
 
-        with patch("promesh_mcp.server.start_health_metrics_server"):
+        with patch("proms_mcp.server.start_health_metrics_server"):
             with patch("uvicorn.run") as mock_uvicorn_run:
                 with patch.dict("os.environ", {"SHUTDOWN_TIMEOUT_SECONDS": "15"}):
                     main()
@@ -697,8 +693,8 @@ class TestFastMCPIntegration:
 
     def test_list_datasources_with_no_config_loader(self) -> None:
         """Test list_datasources when config_loader is None."""
-        with patch("promesh_mcp.server.config_loader", None):
-            from promesh_mcp.server import list_datasources
+        with patch("proms_mcp.server.config_loader", None):
+            from proms_mcp.server import list_datasources
 
             result = list_datasources()
             data = json.loads(result)
@@ -709,14 +705,14 @@ class TestFastMCPIntegration:
     @pytest.mark.asyncio
     async def test_server_ready_state(self) -> None:
         """Test server ready state management."""
-        from promesh_mcp.server import server_ready
+        from proms_mcp.server import server_ready
 
         # Server should be ready by default
         assert server_ready is True
 
     def test_metrics_data_structure(self) -> None:
         """Test that metrics data has the expected structure."""
-        from promesh_mcp.server import metrics_data
+        from proms_mcp.server import metrics_data
 
         # Verify all expected keys exist
         expected_keys = [
@@ -742,11 +738,11 @@ class TestFastMCPIntegration:
     @pytest.mark.asyncio
     async def test_tool_with_missing_optional_parameter(self) -> None:
         """Test tools handle missing optional parameters correctly."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -771,11 +767,11 @@ class TestFastMCPIntegration:
     @pytest.mark.asyncio
     async def test_query_instant_with_optional_time(self) -> None:
         """Test query_instant with optional time parameter."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None
@@ -808,7 +804,7 @@ class TestFastMCPIntegration:
         async def async_func_success() -> str:
             return format_tool_response({"result": "async_success"})
 
-        with patch("promesh_mcp.server.config_loader", Mock()):
+        with patch("proms_mcp.server.config_loader", Mock()):
             result = await async_func_success()
             data = json.loads(result)
             assert data["status"] == "success"
@@ -819,7 +815,7 @@ class TestFastMCPIntegration:
         async def async_func_error() -> str:
             raise ValueError("Async test error")
 
-        with patch("promesh_mcp.server.config_loader", Mock()):
+        with patch("proms_mcp.server.config_loader", Mock()):
             result = await async_func_error()
             data = json.loads(result)
             assert data["status"] == "error"
@@ -830,7 +826,7 @@ class TestFastMCPIntegration:
         async def async_func_no_config() -> str:
             return format_tool_response({"result": "success"})
 
-        with patch("promesh_mcp.server.config_loader", None):
+        with patch("proms_mcp.server.config_loader", None):
             result = await async_func_no_config()
             data = json.loads(result)
             assert data["status"] == "error"
@@ -865,11 +861,11 @@ class TestFastMCPIntegration:
     @pytest.mark.asyncio
     async def test_all_tools_error_handling(self) -> None:
         """Test error handling for all MCP tools when datasource fails."""
-        with patch("promesh_mcp.server.config_loader") as mock_config:
+        with patch("proms_mcp.server.config_loader") as mock_config:
             mock_datasource = Mock()
             mock_config.get_datasource.return_value = mock_datasource
 
-            with patch("promesh_mcp.server.get_prometheus_client") as mock_get_client:
+            with patch("proms_mcp.server.get_prometheus_client") as mock_get_client:
                 mock_client = AsyncMock()
                 mock_client.__aenter__.return_value = mock_client
                 mock_client.__aexit__.return_value = None

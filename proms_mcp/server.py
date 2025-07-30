@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lean Promesh MCP Server using FastMCP."""
+"""Lean Proms MCP Server using FastMCP."""
 
 import asyncio
 import json
@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 # stateless_http=True prevents "No valid session ID provided" errors when clients
 # like Cursor try to reconnect after server restarts
 app = FastMCP(
-    name="promesh-mcp",
+    name="proms-mcp",
     instructions="A lean MCP server providing access to multiple Prometheus instances for metrics analysis and SRE operations.",
     stateless_http=True,
 )
@@ -186,7 +186,7 @@ def mcp_access_log(tool_name: str) -> Callable:
 def initialize_server() -> None:
     """Initialize the server with configuration."""
     global config_loader
-    logger.info("Initializing Promesh MCP server")
+    logger.info("Initializing Proms MCP server")
     config_loader = get_config_loader()
     config_loader.load_datasources()
     logger.info(
@@ -373,7 +373,7 @@ async def query_instant(
 
     Returns:
         JSON string with query results
-        
+
     Note:
         When using the time parameter, check your local system's current date/time
         to ensure queries use appropriate timestamps for meaningful results.
@@ -412,7 +412,7 @@ async def query_range(
 
     Returns:
         JSON string with query results
-        
+
     Note:
         Always check your local system's current date/time when constructing
         start and end timestamps to ensure queries cover the intended time range.

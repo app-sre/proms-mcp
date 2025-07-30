@@ -501,7 +501,7 @@ wheels = [
 ]
 
 [[package]]
-name = "promesh-mcp"
+name = "proms-mcp"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

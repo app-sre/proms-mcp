@@ -1,9 +1,9 @@
 apiVersion: template.openshift.io/v1
 kind: Template
 metadata:
-  name: promesh-mcp-server
+  name: proms-mcp-server
   annotations:
-    description: "Promesh MCP Server deployment template"
+    description: "Proms MCP Server deployment template"
     tags: "prometheus,mcp,monitoring"
 parameters:
 - name: IMAGE
@@ -43,21 +43,21 @@ objects:
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
-    name: promesh-mcp-server
+    name: proms-mcp-server
     labels:
-      app: promesh-mcp-server
+      app: proms-mcp-server
   spec:
     replicas: 2
     selector:
       matchLabels:
-        app: promesh-mcp-server
+        app: proms-mcp-server
     template:
       metadata:
         labels:
-          app: promesh-mcp-server
+          app: proms-mcp-server
       spec:
         containers:
-        - name: promesh-mcp-server
+        - name: proms-mcp-server
           image: "${IMAGE}:${IMAGE_TAG}"
           ports:
           - containerPort: 8000
@@ -129,9 +129,9 @@ objects:
 - apiVersion: v1
   kind: Service
   metadata:
-    name: promesh-mcp-server
+    name: proms-mcp-server
     labels:
-      app: promesh-mcp-server
+      app: proms-mcp-server
   spec:
     ports:
     - name: mcp
@@ -143,16 +143,16 @@ objects:
       protocol: TCP
       targetPort: 8080
     selector:
-      app: promesh-mcp-server
+      app: proms-mcp-server
     type: ClusterIP
 - apiVersion: policy/v1
   kind: PodDisruptionBudget
   metadata:
-    name: promesh-mcp-server-pdb
+    name: proms-mcp-server-pdb
     labels:
-      app: promesh-mcp-server
+      app: proms-mcp-server
   spec:
     minAvailable: 1
     selector:
       matchLabels:
-        app: promesh-mcp-server
+        app: proms-mcp-server

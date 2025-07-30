@@ -1,4 +1,4 @@
-# Promesh MCP Server Makefile
+# Proms MCP Server Makefile
 # Development commands for the FastMCP-based Prometheus server
 
 .PHONY: help install lint format test run build clean
@@ -6,7 +6,7 @@
 
 # Default values
 DATASOURCES_YAML ?= local_config/datasources.yaml
-IMAGE_NAME ?= promesh-mcp
+IMAGE_NAME ?= proms-mcp
 PORT ?= 8000
 
 # Detect container engine
@@ -16,7 +16,7 @@ $(error Neither podman nor docker found. Please install one of them.)
 endif
 
 help:
-	@echo "Promesh MCP Server - Development Commands"
+	@echo "Proms MCP Server - Development Commands"
 	@echo ""
 	@echo "Setup:"
 	@echo "  install     Install dependencies"
@@ -45,16 +45,16 @@ install:
 
 format:
 	@echo "Formatting code..."
-	uv run ruff check --fix promesh_mcp/ tests/
-	uv run ruff check --select I --fix promesh_mcp/ tests/
-	uv run ruff format promesh_mcp/ tests/
+	uv run ruff check --fix proms_mcp/ tests/
+	uv run ruff check --select I --fix proms_mcp/ tests/
+	uv run ruff format proms_mcp/ tests/
 	@echo "✅ Code formatted"
 
 lint:
 	@echo "Running linting checks..."
-	uv run ruff check promesh_mcp/ tests/
+	uv run ruff check proms_mcp/ tests/
 	@echo "Running type checks..."
-	uv run mypy promesh_mcp/ tests/
+	uv run mypy proms_mcp/ tests/
 	@echo "✅ Linting and type checking passed"
 
 test:
@@ -74,7 +74,7 @@ run:
 		exit 1; \
 	fi
 	@echo "Using datasources config: $(DATASOURCES_YAML)"
-	GRAFANA_DATASOURCES_PATH="$(DATASOURCES_YAML)" uv run python -m promesh_mcp
+	GRAFANA_DATASOURCES_PATH="$(DATASOURCES_YAML)" uv run python -m proms_mcp
 
 build:
 	@echo "Building container image with $(notdir $(CONTAINER_ENGINE))..."

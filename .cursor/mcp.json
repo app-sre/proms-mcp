@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "promesh-mcp": {
+    "proms-mcp": {
       "url": "http://localhost:8000/mcp"
     }
   }

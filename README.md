@@ -1,4 +1,4 @@
-# Promesh MCP Server
+# Proms MCP Server
 
 A lean MCP (Model Context Protocol) server that provides LLM agents with transparent access to multiple Prometheus instances for metrics analysis and SRE operations.
 
@@ -44,25 +44,25 @@ This server implements the MCP protocol using the modern FastMCP library, allowi
 ```bash
 # Clone and setup
 git clone <repository-url>
-cd promesh-mcp
+cd proms-mcp
 make install
 
 # Run the server
 make run
-# Or: uv run python -m promesh_mcp
+# Or: uv run python -m proms_mcp
 ```
 
 ### Container Development
 
 ```bash
 # Build container
-podman build -t promesh-mcp .
+podman build -t proms-mcp .
 
 # Create datasource config (see Configuration section)
 # Run with config
 podman run -p 8000:8000 \
   -v ./datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml:ro \
-  promesh-mcp
+  proms-mcp
 ```
 
 ## MCP Client Setup
@@ -74,7 +74,7 @@ Add to your Cursor settings (`Cursor Settings > Features > Rules for AI` or `.cu
 ```json
 {
   "mcpServers": {
-    "promesh-mcp": {
+    "proms-mcp": {
       "url": "http://localhost:8000/mcp"
     }
   }
@@ -145,7 +145,7 @@ oc create secret generic prometheus-datasources \
 
 # Deploy
 oc process -f openshift/deploy.yaml \
-  -p IMAGE=your-registry/promesh-mcp \
+  -p IMAGE=your-registry/proms-mcp \
   -p IMAGE_TAG=v1.0.0 | oc apply -f -
 ```
 
@@ -166,8 +166,8 @@ make test            # Run tests with coverage
 
 ### Project Structure
 ```
-promesh-mcp/
-  promesh_mcp/           # Main package
+proms-mcp/
+  proms_mcp/           # Main package
     server.py            # FastMCP server
     client.py            # Prometheus API wrapper
     config.py            # Config parser

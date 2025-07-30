@@ -5,7 +5,7 @@ from collections import defaultdict
 from typing import Any
 from unittest.mock import Mock, patch
 
-from promesh_mcp.monitoring import (
+from proms_mcp.monitoring import (
     HealthMetricsHandler,
     get_health_data,
     get_prometheus_metrics,
@@ -144,8 +144,8 @@ class TestMonitoring:
             in metrics_text
         )
 
-    @patch("promesh_mcp.monitoring.HTTPServer")
-    @patch("promesh_mcp.monitoring.threading.Thread")
+    @patch("proms_mcp.monitoring.HTTPServer")
+    @patch("proms_mcp.monitoring.threading.Thread")
     def test_start_health_metrics_server(
         self, mock_thread: Any, mock_http_server: Any
     ) -> None:
@@ -217,7 +217,7 @@ class TestHealthMetricsHandler:
     def test_handler_initialization(self) -> None:
         """Test that handler can be initialized with metrics data."""
         # Test that the handler constructor works
-        with patch("promesh_mcp.monitoring.BaseHTTPRequestHandler.__init__"):
+        with patch("proms_mcp.monitoring.BaseHTTPRequestHandler.__init__"):
             handler = HealthMetricsHandler(
                 None, None, None, metrics_data=self.metrics_data
             )
@@ -249,8 +249,8 @@ class TestHealthMetricsIntegration:
     """Integration tests for health metrics server."""
 
     @patch.dict("os.environ", {"HEALTH_METRICS_PORT": "9999"})
-    @patch("promesh_mcp.monitoring.HTTPServer")
-    @patch("promesh_mcp.monitoring.threading.Thread")
+    @patch("proms_mcp.monitoring.HTTPServer")
+    @patch("proms_mcp.monitoring.threading.Thread")
     def test_start_health_metrics_server_with_custom_port(
         self, mock_thread: Mock, mock_http_server: Mock
     ) -> None:
@@ -258,15 +258,15 @@ class TestHealthMetricsIntegration:
         metrics_data: dict[str, Any] = {"test": "data"}
 
         # Mock the run_server function to avoid actual HTTP server creation
-        with patch("promesh_mcp.monitoring.HTTPServer"):
+        with patch("proms_mcp.monitoring.HTTPServer"):
             start_health_metrics_server(metrics_data)
 
         # Verify thread was created and started
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
 
-    @patch("promesh_mcp.monitoring.HTTPServer")
-    @patch("promesh_mcp.monitoring.threading.Thread")
+    @patch("proms_mcp.monitoring.HTTPServer")
+    @patch("proms_mcp.monitoring.threading.Thread")
     def test_start_health_metrics_server_default_port(
         self, mock_thread: Mock, mock_http_server: Mock
     ) -> None:
@@ -274,16 +274,16 @@ class TestHealthMetricsIntegration:
         metrics_data: dict[str, Any] = {"test": "data"}
 
         with patch.dict("os.environ", {}, clear=True):
-            with patch("promesh_mcp.monitoring.HTTPServer"):
+            with patch("proms_mcp.monitoring.HTTPServer"):
                 start_health_metrics_server(metrics_data)
 
         # Verify thread was created and started
         mock_thread.assert_called_once()
         mock_thread.return_value.start.assert_called_once()
 
-    @patch("promesh_mcp.monitoring.logger")
-    @patch("promesh_mcp.monitoring.HTTPServer")
-    @patch("promesh_mcp.monitoring.threading.Thread")
+    @patch("proms_mcp.monitoring.logger")
+    @patch("proms_mcp.monitoring.HTTPServer")
+    @patch("proms_mcp.monitoring.threading.Thread")
     def test_start_health_metrics_server_with_exception(
         self, mock_thread: Mock, mock_http_server: Mock, mock_logger: Mock
     ) -> None:

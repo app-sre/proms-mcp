@@ -1,7 +1,7 @@
 # Build system not needed for uv-managed project
 
 [project]
-name = "promesh-mcp"
+name = "proms-mcp"
 version = "0.1.0"
 description = "A lean MCP server that provides LLM agents with transparent access to multiple Prometheus instances"
 authors = [
@@ -80,7 +80,7 @@ markers = [
 ]
 
 [tool.coverage.run]
-source = ["promesh_mcp"]
+source = ["proms_mcp"]
 omit = ["tests/*", "venv/*", ".venv/*"]
 
 [tool.coverage.report]

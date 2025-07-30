@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for promesh-mcp
+# Multi-stage Dockerfile for proms-mcp
 # Uses Red Hat UBI as base image with Python
 
 # Base stage with Red Hat UBI Python image
@@ -34,7 +34,7 @@ RUN uv sync --frozen --no-group dev --no-install-project --python /usr/bin/pytho
 
 # Copy source code
 COPY README.md ./
-COPY promesh_mcp ./promesh_mcp
+COPY proms_mcp ./proms_mcp
 
 # Sync the project
 RUN uv sync --frozen --no-group dev
@@ -58,7 +58,7 @@ FROM base AS prod
 COPY --from=builder /app/.venv /app/.venv
 
 # Copy application source and project files
-COPY --from=builder /app/promesh_mcp ./promesh_mcp
+COPY --from=builder /app/proms_mcp ./proms_mcp
 COPY --from=builder /app/README.md ./
 COPY --from=builder /app/pyproject.toml ./
 
@@ -68,4 +68,4 @@ EXPOSE 8000 8080
 # Health check handled by OpenShift probes
 
 # Run the FastMCP server
-CMD ["uv", "run", "python", "-m", "promesh_mcp"] 
+CMD ["uv", "run", "python", "-m", "proms_mcp"] 

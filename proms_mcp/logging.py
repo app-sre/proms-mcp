@@ -90,7 +90,7 @@ def get_uvicorn_log_config() -> dict:
         "disable_existing_loggers": False,  # Keep our configured loggers
         "formatters": {
             "json": {
-                "()": "promesh_mcp.logging.JSONFormatter",
+                "()": "proms_mcp.logging.JSONFormatter",
             },
         },
         "handlers": {

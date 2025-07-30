@@ -1,4 +1,4 @@
-# LLM Development Guide for Promesh MCP Server
+# LLM Development Guide for Proms MCP Server
 
 Essential workflow guidance for AI assistants working on this codebase.
 
@@ -76,7 +76,7 @@ async def my_tool(param: str) -> str:
 ## 🔧 File Structure
 
 ```
-promesh_mcp/
+proms_mcp/
   server.py        # Main FastMCP server (8 tools)
   client.py        # Prometheus API wrapper  
   config.py        # Config parser

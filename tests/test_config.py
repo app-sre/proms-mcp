@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import yaml
 
-from promesh_mcp.config import (
+from proms_mcp.config import (
     ConfigLoader,
     PrometheusDataSource,
     get_config_loader,

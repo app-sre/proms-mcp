@@ -8,10 +8,10 @@ from proms_mcp.config import get_auth_mode
 
 
 def test_get_auth_mode_default() -> None:
-    """Test get_auth_mode returns NONE by default."""
+    """Test get_auth_mode returns ACTIVE by default."""
     with patch.dict(os.environ, {}, clear=True):
         auth_mode = get_auth_mode()
-        assert auth_mode == AuthMode.NONE
+        assert auth_mode == AuthMode.ACTIVE
 
 
 def test_get_auth_mode_none() -> None:
@@ -39,8 +39,8 @@ def test_get_auth_mode_case_insensitive() -> None:
         assert auth_mode == AuthMode.ACTIVE
 
 
-def test_get_auth_mode_invalid_defaults_to_none() -> None:
-    """Test get_auth_mode defaults to NONE for invalid values."""
+def test_get_auth_mode_invalid_defaults_to_active() -> None:
+    """Test get_auth_mode defaults to ACTIVE for invalid values."""
     with patch.dict(os.environ, {"AUTH_MODE": "invalid"}):
         auth_mode = get_auth_mode()
-        assert auth_mode == AuthMode.NONE
+        assert auth_mode == AuthMode.ACTIVE

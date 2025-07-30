@@ -116,12 +116,12 @@ def get_config_loader() -> ConfigLoader:
 
 def get_auth_mode() -> AuthMode:
     """Get authentication mode from environment variable."""
-    auth_mode_str = os.getenv("AUTH_MODE", "none").lower()
+    auth_mode_str = os.getenv("AUTH_MODE", "active").lower()
     try:
         return AuthMode(auth_mode_str)
     except ValueError:
         logger.warning(
-            f"Invalid AUTH_MODE '{auth_mode_str}', defaulting to 'none'",
+            f"Invalid AUTH_MODE '{auth_mode_str}', defaulting to 'active'",
             auth_mode=auth_mode_str,
         )
-        return AuthMode.NONE
+        return AuthMode.ACTIVE

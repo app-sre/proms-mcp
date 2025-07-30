@@ -205,6 +205,174 @@ class BearerTokenBackend:
         return await self.openshift_client.validate_token(token)
 ```
 
+### Bearer Token Authentication Scenarios
+
+The bearer token authentication supports multiple deployment scenarios with flexible SSL and API configuration options:
+
+#### Scenario 1: Development with SSL Verification Disabled
+
+**Use Case**: Local development against self-signed or untrusted certificates
+
+**Configuration**:
+```bash
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://api.cluster.example.com:6443
+export OPENSHIFT_SSL_VERIFY=false  # Disable SSL verification (INSECURE)
+export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
+```
+
+**Security Warning**: This is insecure and should only be used for development. SSL verification is disabled, making the connection vulnerable to man-in-the-middle attacks.
+
+#### Scenario 2: Production with Public Certificates (Default)
+
+**Use Case**: Production deployment where OpenShift cluster uses valid LetsEncrypt or other trusted certificates
+
+**Configuration**:
+```bash
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://api.cluster.example.com:6443
+# OPENSHIFT_SSL_VERIFY defaults to "true"
+# No custom CA certificate needed - uses system CA bundle
+```
+
+**Features**:
+- Uses system CA bundle for certificate validation
+- Works with standard trusted certificates (LetsEncrypt, DigiCert, etc.)
+- Default and recommended configuration for most deployments
+
+#### Scenario 3: Custom CA Certificate
+
+**Use Case**: OpenShift cluster with custom or internal CA certificates
+
+**Configuration**:
+```bash
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://api.cluster.example.com:6443
+export OPENSHIFT_CA_CERT_PATH=/path/to/custom-ca.crt
+export OPENSHIFT_SSL_VERIFY=true  # Optional, defaults to true
+```
+
+**CA Certificate Extraction** (if needed):
+```bash
+# Extract CA from current kubeconfig context
+kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > custom-ca.crt
+
+# Or extract from OpenShift configmap (if accessible)
+oc get cm kube-apiserver-server-ca -n openshift-kube-apiserver -o jsonpath="{.data.ca-bundle\.crt}" > custom-ca.crt
+```
+
+#### Scenario 4: In-Pod Deployment with Internal API
+
+**Use Case**: Server running inside OpenShift cluster using internal Kubernetes API
+
+**Configuration**:
+```bash
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://kubernetes.default.svc:443  # Internal Kubernetes API
+# Service account token automatically mounted at default path
+# CA certificate automatically available at /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+```
+
+**Kubernetes Mounts** (automatic in pods):
+- Service Account Token: `/var/run/secrets/kubernetes.io/serviceaccount/token`
+- CA Certificate: `/var/run/secrets/kubernetes.io/serviceaccount/ca.crt`
+- Namespace: `/var/run/secrets/kubernetes.io/serviceaccount/namespace`
+
+**Deployment Example**:
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: proms-mcp-server
+spec:
+  template:
+    spec:
+      serviceAccountName: proms-mcp-server
+      containers:
+      - name: proms-mcp
+        image: proms-mcp:latest
+        env:
+        - name: AUTH_MODE
+          value: "active"
+        - name: OPENSHIFT_API_URL
+          value: "https://kubernetes.default.svc:443"
+        # No need to set CA cert path - uses mounted ca.crt automatically
+        # No need to set service account token - uses mounted token automatically
+```
+
+#### Scenario 5: External API with Service Account Token
+
+**Use Case**: Server running outside cluster but using service account authentication
+
+**Configuration**:
+```bash
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://api.cluster.example.com:6443
+export OPENSHIFT_SERVICE_ACCOUNT_TOKEN_PATH=/path/to/service-account-token
+export OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt  # If needed for custom certs
+```
+
+**Service Account Token Creation**:
+```bash
+# Create service account
+oc create serviceaccount proms-mcp-external
+
+# Create token secret
+oc create secret generic proms-mcp-token --type=kubernetes.io/service-account-token
+oc patch secret proms-mcp-token -p '{"metadata":{"annotations":{"kubernetes.io/service-account.name":"proms-mcp-external"}}}'
+
+# Extract token
+oc get secret proms-mcp-token -o jsonpath='{.data.token}' | base64 -d > service-account-token
+```
+
+### SSL Configuration Details
+
+#### Environment Variables
+
+| Variable | Values | Default | Description |
+|----------|--------|---------|-------------|
+| `OPENSHIFT_SSL_VERIFY` | `true`, `false` | `true` | Enable/disable SSL certificate verification |
+| `OPENSHIFT_CA_CERT_PATH` | File path | None | Path to custom CA certificate file |
+
+#### SSL Verification Behavior
+
+1. **Custom CA Certificate Priority**: If `OPENSHIFT_CA_CERT_PATH` is set and file exists, it takes priority over `OPENSHIFT_SSL_VERIFY`
+2. **System CA Bundle**: When `OPENSHIFT_SSL_VERIFY=true` (default) and no custom CA, uses system CA bundle
+3. **Disabled Verification**: When `OPENSHIFT_SSL_VERIFY=false`, all certificate validation is skipped (insecure)
+
+#### Code Implementation
+
+```python
+def _get_ssl_verify_config(self) -> bool | str:
+    """Get SSL verification configuration.
+    
+    When running within a pod, OpenShift clusters typically have valid 
+    LetsEncrypt certificates accessible from outside, and the default 
+    system CA bundle should handle verification correctly.
+
+    Returns:
+        - False: Disable SSL verification (insecure, for development only)
+        - True: Use system CA bundle (default, works with LetsEncrypt certs)
+        - str: Path to custom CA certificate file (only needed for custom certs)
+    """
+    # Check environment variable for SSL verification control
+    ssl_verify_env = os.getenv("OPENSHIFT_SSL_VERIFY", "true").lower()
+
+    if ssl_verify_env == "false":
+        logger.warning(
+            "SSL certificate verification disabled - this is insecure and should only be used for development"
+        )
+        return False
+
+    # If CA cert path is provided, use it
+    if self.ca_cert_path and os.path.exists(self.ca_cert_path):
+        logger.info("Using custom CA certificate", ca_cert_path=self.ca_cert_path)
+        return self.ca_cert_path
+
+    # Default to system CA bundle
+    return True
+```
+
 ### Phase 3: Active Authentication - OAuth Integration (3-4 weeks)
 **Purpose**: Enhanced user experience with automatic token refresh
 
@@ -299,14 +467,21 @@ class ActiveAuthBackend:
 
 ```python
 # Authentication configuration
-AUTH_MODE = "none" | "active"
+AUTH_MODE = "none" | "active"  # Default: "active"
 
 # OpenShift API configuration
 OPENSHIFT_API_URL = "https://api.cluster.example.com:6443"
 OPENSHIFT_SERVICE_ACCOUNT_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
+# SSL/TLS configuration
+OPENSHIFT_SSL_VERIFY = "true" | "false"  # Default: "true"
+OPENSHIFT_CA_CERT_PATH = "/path/to/custom-ca.crt"  # Optional: Custom CA certificate
+
 # Authentication caching
 AUTH_CACHE_TTL_SECONDS = "300"  # 5 minutes
+
+# Service account token (for local development)
+OPENSHIFT_SERVICE_ACCOUNT_TOKEN = "$(oc whoami -t)"  # User token for local dev
 
 # OAuth configuration (Phase 3)
 OAUTH_CLIENT_ID = "proms-mcp-client"
@@ -659,9 +834,9 @@ roleRef:
 
 ### Local Development Setup
 
-#### Option 1: No Authentication (Simplest)
+#### Option 1: No Authentication (Development Only)
 ```bash
-# Default mode for initial development
+# Explicitly disable authentication for development
 export AUTH_MODE=none
 uv run python -m proms_mcp
 
@@ -676,15 +851,15 @@ uv run python -m proms_mcp
 }
 ```
 
-#### Option 2: Active Authentication (Recommended for Auth Testing)
+#### Option 2: Active Authentication (Default - Recommended)
 ```bash
 # Prerequisites: oc CLI installed and logged into OpenShift cluster
 oc login https://api.your-cluster.com:6443
 
-# Set up environment
+# Set up environment (default SSL verification)
 export AUTH_MODE=active
 export OPENSHIFT_API_URL=https://api.your-cluster.com:6443
-export OPENSHIFT_TOKEN=$(oc whoami -t)
+export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
 
 # Run server
 uv run python -m proms_mcp
@@ -701,6 +876,46 @@ uv run python -m proms_mcp
     }
   }
 }
+```
+
+#### Option 2a: Active Authentication with SSL Verification Disabled (Development)
+```bash
+# For development with self-signed certificates
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://api.your-cluster.com:6443
+export OPENSHIFT_SSL_VERIFY=false  # INSECURE - development only
+export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
+
+# Run server
+uv run python -m proms_mcp
+```
+
+#### Option 2b: Active Authentication with Custom CA Certificate
+```bash
+# For clusters with custom CA certificates
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://api.your-cluster.com:6443
+export OPENSHIFT_CA_CERT_PATH=/path/to/custom-ca.crt
+export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
+
+# Extract CA certificate if needed
+kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > custom-ca.crt
+
+# Run server
+uv run python -m proms_mcp
+```
+
+#### Option 2c: Active Authentication for In-Pod Testing
+```bash
+# Simulate in-pod environment
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://kubernetes.default.svc:443
+export OPENSHIFT_SERVICE_ACCOUNT_TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token
+export OPENSHIFT_CA_CERT_PATH=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+
+# Note: These files need to be available locally for testing
+# In actual pod deployment, they're automatically mounted
+uv run python -m proms_mcp
 ```
 
 #### Option 3: OAuth Testing (Advanced)
@@ -752,6 +967,32 @@ curl -H "Authorization: Bearer invalid-token" \
 curl http://localhost:8000/mcp/list_datasources
 ```
 
+#### SSL Configuration Testing
+```bash
+# Test with default SSL verification (should work with trusted certs)
+AUTH_MODE=active OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
+  OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t) \
+  uv run python -m proms_mcp
+
+# Test with SSL verification disabled (development only)
+AUTH_MODE=active OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
+  OPENSHIFT_SSL_VERIFY=false \
+  OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t) \
+  uv run python -m proms_mcp
+
+# Test with custom CA certificate
+AUTH_MODE=active OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
+  OPENSHIFT_CA_CERT_PATH=/path/to/custom-ca.crt \
+  OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t) \
+  uv run python -m proms_mcp
+
+# Test internal API (for in-pod simulation)
+AUTH_MODE=active OPENSHIFT_API_URL=https://kubernetes.default.svc:443 \
+  OPENSHIFT_SERVICE_ACCOUNT_TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token \
+  OPENSHIFT_CA_CERT_PATH=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+  uv run python -m proms_mcp
+```
+
 #### Token Information
 ```bash
 # Check your current OpenShift token
@@ -767,10 +1008,11 @@ oc whoami --show-groups
 
 ### Development Recommendations
 
-1. **Start Simple**: Begin with `AUTH_MODE=none` for initial development
-2. **Active Mode Testing**: Use this for most authentication testing - it's straightforward
-3. **OAuth Testing**: Only test locally if you need to debug OAuth flows; otherwise test in dev environment
-4. **Token Refresh**: Remember to refresh your OpenShift token (`oc login`) when it expires
+1. **Secure by Default**: The server defaults to `AUTH_MODE=active` for security
+2. **Development Override**: Explicitly set `AUTH_MODE=none` for local development when needed
+3. **Active Mode Testing**: This is now the default - set up OpenShift authentication for full testing
+4. **OAuth Testing**: Only test locally if you need to debug OAuth flows; otherwise test in dev environment
+5. **Token Refresh**: Remember to refresh your OpenShift token (`oc login`) when it expires
 
 ### Makefile Integration
 
@@ -778,16 +1020,31 @@ Add these commands to your Makefile for easier testing:
 
 ```makefile
 # Authentication testing targets
-.PHONY: run-no-auth run-active-auth test-auth
+.PHONY: run-no-auth run-active-auth run-active-auth-no-ssl run-active-auth-custom-ca run-active-auth-internal test-auth test-ssl-configs
 
 run-no-auth:
-	@echo "Starting server with no authentication..."
+	@echo "Starting server with no authentication (development only)..."
 	AUTH_MODE=none uv run python -m proms_mcp
 
 run-active-auth:
-	@echo "Starting server with active authentication..."
+	@echo "Starting server with active authentication (default SSL verification)..."
 	@echo "Requires: oc login and OPENSHIFT_API_URL environment variable"
-	AUTH_MODE=active OPENSHIFT_TOKEN=$$(oc whoami -t) uv run python -m proms_mcp
+	AUTH_MODE=active OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$$(oc whoami -t) OPENSHIFT_API_URL=https://api.cluster.example.com:6443 uv run python -m proms_mcp
+
+run-active-auth-no-ssl:
+	@echo "Starting server with active authentication (SSL verification disabled - INSECURE)..."
+	@echo "Requires: oc login and OPENSHIFT_API_URL environment variable"
+	AUTH_MODE=active OPENSHIFT_SSL_VERIFY=false OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$$(oc whoami -t) OPENSHIFT_API_URL=https://api.cluster.example.com:6443 uv run python -m proms_mcp
+
+run-active-auth-custom-ca:
+	@echo "Starting server with active authentication (custom CA certificate)..."
+	@echo "Requires: oc login, OPENSHIFT_API_URL, and custom-ca.crt file"
+	AUTH_MODE=active OPENSHIFT_CA_CERT_PATH=./custom-ca.crt OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$$(oc whoami -t) OPENSHIFT_API_URL=https://api.cluster.example.com:6443 uv run python -m proms_mcp
+
+run-active-auth-internal:
+	@echo "Starting server with active authentication (internal Kubernetes API)..."
+	@echo "Requires: Service account token and CA cert files in standard locations"
+	AUTH_MODE=active OPENSHIFT_API_URL=https://kubernetes.default.svc:443 OPENSHIFT_SERVICE_ACCOUNT_TOKEN_PATH=/var/run/secrets/kubernetes.io/serviceaccount/token OPENSHIFT_CA_CERT_PATH=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt uv run python -m proms_mcp
 
 test-auth:
 	@echo "Testing authentication..."
@@ -795,6 +1052,18 @@ test-auth:
 	curl -s http://localhost:8000/health || echo "Server not running"
 	@echo "Bearer token test (if server running with auth):"
 	curl -s -H "Authorization: Bearer $$(oc whoami -t)" http://localhost:8000/health || echo "Auth test failed"
+
+test-ssl-configs:
+	@echo "Testing SSL configuration detection..."
+	@echo "Default SSL verification:"
+	@AUTH_MODE=active OPENSHIFT_API_URL=https://api.cluster.example.com:6443 python -c "from proms_mcp.auth.openshift import OpenShiftClient; client = OpenShiftClient('https://api.cluster.example.com:6443'); print('SSL Config:', client._get_ssl_verify_config())"
+	@echo "SSL verification disabled:"
+	@OPENSHIFT_SSL_VERIFY=false AUTH_MODE=active OPENSHIFT_API_URL=https://api.cluster.example.com:6443 python -c "from proms_mcp.auth.openshift import OpenShiftClient; client = OpenShiftClient('https://api.cluster.example.com:6443'); print('SSL Config:', client._get_ssl_verify_config())"
+
+extract-ca-cert:
+	@echo "Extracting CA certificate from current kubeconfig context..."
+	kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d > custom-ca.crt
+	@echo "CA certificate saved as custom-ca.crt"
 ```
 
 This phased approach allows for incremental implementation while maintaining the lean design principles of the MCP server. 

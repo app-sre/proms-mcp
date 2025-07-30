@@ -1,69 +1,54 @@
 {
-  "development": {
-    "description": "Local development with no authentication",
+  "development-no-auth": {
+    "description": "Local development with no authentication (AUTH_MODE=none)",
     "mcpServers": {
       "proms-mcp-dev": {
         "url": "http://localhost:8000/mcp",
-        "description": "Development server - no auth required"
-      }
-    }
-  },
-  "production-local-token": {
-    "description": "Production with local OpenShift token",
-    "mcpServers": {
-      "proms-mcp": {
-        "url": "https://proms-mcp.apps.cluster.example.com/mcp",
-        "headers": {
-          "Authorization": "Bearer ${OPENSHIFT_TOKEN}"
-        },
-        "description": "Production server with bearer token auth"
+        "description": "Development server - authentication disabled"
       }
     },
-    "setup": [
-      "# Get your OpenShift token:",
-      "export OPENSHIFT_TOKEN=$(oc whoami -t)",
-      "# Or set it directly in the config above"
+    "server_setup": [
+      "# Start server in no-auth mode:",
+      "export AUTH_MODE=none",
+      "uv run python -m proms_mcp"
     ]
   },
-  "production-service-account": {
-    "description": "Production with service account token",
+  "development-with-auth": {
+    "description": "Local development with authentication enabled for testing",
     "mcpServers": {
-      "proms-mcp": {
-        "url": "https://proms-mcp.apps.cluster.example.com/mcp",
-        "headers": {
-          "Authorization": "Bearer sa-token-here"
-        },
-        "description": "Production server with service account token"
-      }
-    },
-    "setup": [
-      "# Create a service account and get its token:",
-      "oc create serviceaccount mcp-client",
-      "oc adm policy add-cluster-role-to-user view system:serviceaccount:$(oc project -q):mcp-client",
-      "# Get the token from the service account secret"
-    ]
-  },
-  "multi-environment": {
-    "description": "Multiple environments in one config",
-    "mcpServers": {
-      "proms-mcp-dev": {
+      "proms-mcp-auth-test": {
         "url": "http://localhost:8000/mcp",
-        "description": "Local development"
-      },
-      "proms-mcp-stage": {
-        "url": "https://proms-mcp.apps.stage.example.com/mcp",
         "headers": {
-          "Authorization": "Bearer ${STAGE_TOKEN}"
+          "Authorization": "Bearer your-openshift-token-here"
         },
-        "description": "Staging environment"
-      },
-      "proms-mcp-prod": {
-        "url": "https://proms-mcp.apps.prod.example.com/mcp",
-        "headers": {
-          "Authorization": "Bearer ${PROD_TOKEN}"
-        },
-        "description": "Production environment"
+        "description": "Local server with authentication for testing auth flows"
       }
-    }
+    },
+    "setup": [
+      "# 1. Login to OpenShift:",
+      "oc login https://api.cluster.example.com:6443",
+      "",
+      "# 2. Get your token and replace 'your-openshift-token-here' above:",
+      "oc whoami -t"
+    ],
+    "server_setup": [
+      "# Start local server with authentication enabled:",
+      "export AUTH_MODE=active",
+      "export OPENSHIFT_API_URL=https://api.cluster.example.com:6443",
+      "export OPENSHIFT_SSL_VERIFY=false  # For dev with self-signed certs",
+      "export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)",
+      "uv run python -m proms_mcp"
+    ]
+  },
+  "usage_notes": {
+    "security": [
+      "⚠️  NEVER commit .cursor/mcp.json with real tokens to git",
+      "⚠️  Copy configurations above to .cursor/mcp.json and customize",
+      "⚠️  Replace 'your-openshift-token-here' with actual tokens"
+    ],
+    "auth_modes": [
+      "🔓 AUTH_MODE=none: No authentication (development only)",
+      "🔒 AUTH_MODE=active: OpenShift bearer token validation"
+    ]
   }
 } 

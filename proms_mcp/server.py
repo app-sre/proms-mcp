@@ -3,7 +3,9 @@
 
 import asyncio
 import json
+import os
 import re
+import sys
 import time
 from collections import defaultdict
 from collections.abc import Callable
@@ -16,6 +18,7 @@ from mcp.server.fastmcp import FastMCP
 
 from .auth import AuthMode
 from .auth.backends import NoAuthBackend
+from .auth.openshift import BearerTokenBackend, OpenShiftClient
 from .client import get_prometheus_client
 from .config import get_auth_mode, get_config_loader
 from .logging import configure_logging, get_uvicorn_log_config
@@ -42,7 +45,7 @@ server_ready = True
 config_loader = None
 
 # Global auth backend
-auth_backend = None
+auth_backend: Any = None
 
 # Prometheus metrics collection
 metrics_data: dict[str, Any] = {
@@ -201,9 +204,20 @@ def initialize_server() -> None:
         auth_backend = NoAuthBackend()
         logger.info("Using no-auth backend for development")
     elif auth_mode == AuthMode.ACTIVE:
-        # TODO: Implement active authentication in Phase 2
-        logger.error("Active authentication not yet implemented")
-        raise NotImplementedError("Active authentication mode not yet implemented")
+        # Initialize OpenShift authentication
+        openshift_api_url = os.getenv("OPENSHIFT_API_URL")
+        if not openshift_api_url:
+            logger.error("OPENSHIFT_API_URL required for active authentication mode")
+            raise ValueError(
+                "OPENSHIFT_API_URL environment variable is required for active authentication"
+            )
+
+        ca_cert_path = os.getenv("OPENSHIFT_CA_CERT_PATH")
+        openshift_client = OpenShiftClient(openshift_api_url, ca_cert_path=ca_cert_path)
+        auth_backend = BearerTokenBackend(openshift_client)
+        logger.info(
+            "Using OpenShift bearer token authentication", api_url=openshift_api_url
+        )
 
     # Initialize datasources
     config_loader = get_config_loader()
@@ -561,11 +575,18 @@ async def find_metrics_by_pattern(datasource_id: str, pattern: str) -> str:
         )
 
 
+
+
+
+
+
 # MCP Tools Implementation
 
 
-# Initialize the server on module load
-initialize_server()
+# Initialize the server on module load only if not in test environment
+# Check for pytest or testing environment
+if "pytest" not in sys.modules and not os.getenv("PYTEST_CURRENT_TEST"):
+    initialize_server()
 
 
 def main() -> None:
@@ -583,10 +604,20 @@ def main() -> None:
     timeout_graceful_shutdown = int(os.getenv("SHUTDOWN_TIMEOUT_SECONDS", "8"))
 
     # Create the ASGI app from FastMCP
-    asgi_app = app.streamable_http_app()
+    asgi_app: Any = app.streamable_http_app()
 
-    # Note: Authentication middleware integration with FastMCP will be implemented in Phase 2
-    # For now, no-auth mode is fully functional
+    # Wrap with authentication middleware if active auth mode
+    if auth_backend and get_auth_mode() == AuthMode.ACTIVE:
+        # Import middleware here to avoid circular imports
+        from .auth.middleware import AuthenticationMiddleware
+
+        logger.info("Wrapping FastMCP ASGI app with authentication middleware")
+
+        # Wrap the ASGI app with authentication middleware
+        asgi_app = AuthenticationMiddleware(asgi_app, auth_backend=auth_backend)
+        logger.info("Authentication middleware integrated successfully")
+    else:
+        logger.info("Running without authentication middleware (no-auth mode)")
 
     try:
         uvicorn.run(

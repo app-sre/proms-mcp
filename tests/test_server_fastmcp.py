@@ -63,7 +63,8 @@ class TestFastMCPServer:
         """Test server initialization."""
         self.create_test_datasource_config()
 
-        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config, \
+             patch("proms_mcp.server.get_auth_mode") as mock_get_auth_mode:
             mock_config = Mock()
             mock_config.datasources = {
                 "test-prometheus": PrometheusDataSource(
@@ -74,6 +75,9 @@ class TestFastMCPServer:
                 )
             }
             mock_get_config.return_value = mock_config
+            # Use no-auth mode for testing
+            from proms_mcp.auth import AuthMode
+            mock_get_auth_mode.return_value = AuthMode.NONE
 
             initialize_server()
 
@@ -555,10 +559,14 @@ class TestFastMCPIntegration:
     @pytest.mark.asyncio
     async def test_server_can_start(self) -> None:
         """Test that the server can be initialized without errors."""
-        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config, \
+             patch("proms_mcp.server.get_auth_mode") as mock_get_auth_mode:
             mock_config = Mock()
             mock_config.datasources = {}
             mock_get_config.return_value = mock_config
+            # Use no-auth mode for testing
+            from proms_mcp.auth import AuthMode
+            mock_get_auth_mode.return_value = AuthMode.NONE
 
             # This should not raise any exceptions
             initialize_server()
@@ -620,7 +628,8 @@ class TestFastMCPIntegration:
 
     def test_server_initialization_with_datasources(self) -> None:
         """Test server initialization with multiple datasources."""
-        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config, \
+             patch("proms_mcp.server.get_auth_mode") as mock_get_auth_mode:
             mock_config = Mock()
             mock_config.datasources = {
                 "ds1": PrometheusDataSource(name="ds1", url="http://prom1:9090"),
@@ -628,6 +637,9 @@ class TestFastMCPIntegration:
                 "ds3": PrometheusDataSource(name="ds3", url="http://prom3:9090"),
             }
             mock_get_config.return_value = mock_config
+            # Use no-auth mode for testing
+            from proms_mcp.auth import AuthMode
+            mock_get_auth_mode.return_value = AuthMode.NONE
 
             # Clear any existing metrics
             from proms_mcp.server import metrics_data
@@ -642,11 +654,15 @@ class TestFastMCPIntegration:
 
     def test_server_initialization_config_loading_failure(self) -> None:
         """Test server handles config loading failures gracefully."""
-        with patch("proms_mcp.server.get_config_loader") as mock_get_config:
+        with patch("proms_mcp.server.get_config_loader") as mock_get_config, \
+             patch("proms_mcp.server.get_auth_mode") as mock_get_auth_mode:
             mock_config = Mock()
             mock_config.load_datasources.side_effect = Exception("Config load failed")
             mock_config.datasources = {}
             mock_get_config.return_value = mock_config
+            # Use no-auth mode for testing
+            from proms_mcp.auth import AuthMode
+            mock_get_auth_mode.return_value = AuthMode.NONE
 
             # The server should handle config loading failures gracefully
             # In the actual implementation, this would log an error but not crash

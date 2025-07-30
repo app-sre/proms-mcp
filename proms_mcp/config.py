@@ -7,6 +7,8 @@ from pathlib import Path
 import structlog
 import yaml
 
+from .auth import AuthMode
+
 logger = structlog.get_logger()
 
 
@@ -110,3 +112,16 @@ def get_config_loader() -> ConfigLoader:
         "/etc/grafana/provisioning/datasources/datasources.yaml",
     )
     return ConfigLoader(datasources_file)
+
+
+def get_auth_mode() -> AuthMode:
+    """Get authentication mode from environment variable."""
+    auth_mode_str = os.getenv("AUTH_MODE", "none").lower()
+    try:
+        return AuthMode(auth_mode_str)
+    except ValueError:
+        logger.warning(
+            f"Invalid AUTH_MODE '{auth_mode_str}', defaulting to 'none'",
+            auth_mode=auth_mode_str,
+        )
+        return AuthMode.NONE

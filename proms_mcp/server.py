@@ -14,8 +14,10 @@ from typing import Any
 import structlog
 from mcp.server.fastmcp import FastMCP
 
+from .auth import AuthMode
+from .auth.backends import NoAuthBackend
 from .client import get_prometheus_client
-from .config import get_config_loader
+from .config import get_auth_mode, get_config_loader
 from .logging import configure_logging, get_uvicorn_log_config
 from .monitoring import start_health_metrics_server
 
@@ -38,6 +40,9 @@ server_ready = True
 
 # Global config loader
 config_loader = None
+
+# Global auth backend
+auth_backend = None
 
 # Prometheus metrics collection
 metrics_data: dict[str, Any] = {
@@ -185,8 +190,22 @@ def mcp_access_log(tool_name: str) -> Callable:
 
 def initialize_server() -> None:
     """Initialize the server with configuration."""
-    global config_loader
+    global config_loader, auth_backend
     logger.info("Initializing Proms MCP server")
+
+    # Initialize authentication
+    auth_mode = get_auth_mode()
+    logger.info(f"Authentication mode: {auth_mode.value}", auth_mode=auth_mode.value)
+
+    if auth_mode == AuthMode.NONE:
+        auth_backend = NoAuthBackend()
+        logger.info("Using no-auth backend for development")
+    elif auth_mode == AuthMode.ACTIVE:
+        # TODO: Implement active authentication in Phase 2
+        logger.error("Active authentication not yet implemented")
+        raise NotImplementedError("Active authentication mode not yet implemented")
+
+    # Initialize datasources
     config_loader = get_config_loader()
     config_loader.load_datasources()
     logger.info(
@@ -565,6 +584,9 @@ def main() -> None:
 
     # Create the ASGI app from FastMCP
     asgi_app = app.streamable_http_app()
+
+    # Note: Authentication middleware integration with FastMCP will be implemented in Phase 2
+    # For now, no-auth mode is fully functional
 
     try:
         uvicorn.run(

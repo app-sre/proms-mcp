@@ -15,7 +15,9 @@ dependencies = [
     "pyyaml>=6.0",
     "httpx>=0.24.0",
     "structlog>=23.0.0",
-    "pydantic>=2.0.0"
+    "pydantic>=2.0.0",
+    "pytest-asyncio>=1.1.0",
+    "mypy>=1.17.0",
 ]
 
 [tool.uv]
@@ -77,6 +79,7 @@ addopts = "--strict-markers --strict-config"
 markers = [
     "unit: Unit tests",
     "integration: Integration tests",
+    "asyncio: Async tests",
 ]
 
 [tool.coverage.run]

@@ -100,6 +100,31 @@ The server exposes MCP over HTTP at:
 - `QUERY_TIMEOUT`: Query timeout in seconds (default: 30)
 - `SHUTDOWN_TIMEOUT_SECONDS`: Graceful shutdown timeout in seconds (default: 8)
 
+### Authentication Configuration
+
+The server supports two authentication modes:
+
+- `AUTH_MODE`: Authentication mode (`none` or `active`, default: `none`)
+- `OPENSHIFT_API_URL`: OpenShift API server URL (required for active auth)
+- `AUTH_CACHE_TTL_SECONDS`: Authentication cache TTL in seconds (default: 300)
+
+#### No Authentication Mode (Development)
+
+```bash
+# Default mode - no authentication required
+AUTH_MODE=none uv run python -m proms_mcp
+```
+
+#### Active Authentication Mode (Production)
+
+```bash
+# Production mode - requires OpenShift bearer token validation
+AUTH_MODE=active OPENSHIFT_API_URL=https://api.cluster.example.com:6443 uv run python -m proms_mcp
+```
+
+**Required RBAC for Active Mode:**
+The server requires the `system:auth-delegator` ClusterRole to validate OpenShift tokens.
+
 ### Datasource Configuration
 
 Create a Grafana datasource provisioning YAML file. Only `type: "prometheus"` datasources are processed.
@@ -155,6 +180,81 @@ oc process -f openshift/deploy.yaml \
 - **GET /health**: Health check (port 8080)
 - **GET /metrics**: Prometheus metrics (port 8080)
 
+## Deployment
+
+### OpenShift Deployment
+
+Deploy using the provided OpenShift template:
+
+```bash
+# Development deployment (no authentication)
+oc process -f openshift/deploy.yaml \
+  -p IMAGE=quay.io/app-sre/proms-mcp \
+  -p IMAGE_TAG=latest \
+  -p AUTH_MODE=none \
+  | oc apply -f -
+
+# Production deployment (active authentication)
+oc process -f openshift/deploy.yaml \
+  -p IMAGE=quay.io/app-sre/proms-mcp \
+  -p IMAGE_TAG=v1.0.0 \
+  -p AUTH_MODE=active \
+  -p OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
+  | oc apply -f -
+
+# For active authentication, also create the required ClusterRoleBinding:
+oc create clusterrolebinding proms-mcp-auth-delegator \
+  --clusterrole=system:auth-delegator \
+  --serviceaccount=$(oc project -q):proms-mcp-server
+```
+
+**Template Parameters:**
+- `AUTH_MODE`: `none` (development) or `active` (production)
+- `OPENSHIFT_API_URL`: Required for active authentication mode
+- `AUTH_CACHE_TTL_SECONDS`: Token validation cache TTL (default: 300)
+
+### MCP Client Configuration
+
+#### Development Mode (No Authentication)
+```json
+{
+  "mcpServers": {
+    "proms-mcp-dev": {
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+#### Production Mode (Bearer Token)
+```json
+{
+  "mcpServers": {
+    "proms-mcp": {
+      "url": "https://proms-mcp.apps.cluster.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${OPENSHIFT_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Get your OpenShift token:
+```bash
+export OPENSHIFT_TOKEN=$(oc whoami -t)
+```
+
+### RBAC Requirements
+
+For production (active authentication) deployments, the server requires:
+
+1. **ServiceAccount**: `proms-mcp-server` (created by template)
+2. **ClusterRoleBinding**: Uses `system:auth-delegator` ClusterRole for token validation (must be created separately)
+3. **User Tokens**: Users need valid OpenShift tokens (`oc whoami -t`)
+
+The template creates the ServiceAccount. The ClusterRoleBinding must be created separately using the command shown above.
+
 ## Development
 
 ### Code Quality
@@ -167,13 +267,20 @@ make test            # Run tests with coverage
 ### Project Structure
 ```
 proms-mcp/
-  proms_mcp/           # Main package
-    server.py            # FastMCP server
-    client.py            # Prometheus API wrapper
-    config.py            # Config parser
-    monitoring.py        # Health/metrics endpoints
-  tests/                 # Test suite
-  openshift/deploy.yaml  # OpenShift template
+  proms_mcp/             # Main package
+    auth/                  # Authentication module
+      __init__.py            # AuthMode enum, User model
+      backends.py            # NoAuthBackend implementation
+      middleware.py          # Authentication middleware
+      models.py              # User and AuthBackend protocol
+    server.py              # FastMCP server
+    client.py              # Prometheus API wrapper
+    config.py              # Config parser with auth support
+    monitoring.py          # Health/metrics endpoints
+  tests/                   # Test suite
+    auth/                    # Authentication tests
+  openshift/deploy.yaml    # OpenShift template with auth support
+  .cursor/mcp.json         # MCP client configuration examples
 ```
 
 ## Troubleshooting

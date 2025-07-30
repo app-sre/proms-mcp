@@ -1,0 +1,35 @@
+"""Authentication middleware for FastMCP integration."""
+
+from typing import Any
+
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+from .models import AuthBackend
+
+
+class AuthenticationMiddleware(BaseHTTPMiddleware):
+    """Middleware to handle authentication for all requests."""
+
+    def __init__(self, app: Any, auth_backend: AuthBackend):
+        super().__init__(app)
+        self.auth_backend = auth_backend
+
+    async def dispatch(self, request: Any, call_next: Any) -> Any:
+        """Process request with authentication."""
+        # Skip authentication for health checks and metrics
+        if request.url.path in ["/health", "/metrics"]:
+            return await call_next(request)
+
+        # Authenticate request
+        user = await self.auth_backend.authenticate(request)
+
+        if user is None:
+            return JSONResponse(
+                status_code=401, content={"error": "Authentication required"}
+            )
+
+        # Add user to request state
+        request.state.user = user
+
+        return await call_next(request)

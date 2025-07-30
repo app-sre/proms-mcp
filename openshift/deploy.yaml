@@ -39,7 +39,22 @@ parameters:
 - name: SECRET_NAME
   description: "Name of the secret containing datasource configuration"
   value: "prometheus-datasources"
+- name: AUTH_MODE
+  description: "Authentication mode (none, active)"
+  value: "active"
+- name: OPENSHIFT_API_URL
+  description: "OpenShift API server URL for token validation (required for active auth)"
+  required: false
+- name: AUTH_CACHE_TTL_SECONDS
+  description: "Authentication cache TTL in seconds"
+  value: "300"
 objects:
+- apiVersion: v1
+  kind: ServiceAccount
+  metadata:
+    name: proms-mcp-server
+    labels:
+      app: proms-mcp-server
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
@@ -56,6 +71,7 @@ objects:
         labels:
           app: proms-mcp-server
       spec:
+        serviceAccountName: proms-mcp-server
         containers:
         - name: proms-mcp-server
           image: "${IMAGE}:${IMAGE_TAG}"
@@ -79,7 +95,12 @@ objects:
             value: "${SHUTDOWN_TIMEOUT_SECONDS}"
           - name: HEALTH_METRICS_PORT
             value: "${HEALTH_METRICS_PORT}"
-
+          - name: AUTH_MODE
+            value: "${AUTH_MODE}"
+          - name: OPENSHIFT_API_URL
+            value: "${OPENSHIFT_API_URL}"
+          - name: AUTH_CACHE_TTL_SECONDS
+            value: "${AUTH_CACHE_TTL_SECONDS}"
           resources:
             requests:
               memory: "${MEMORY_REQUEST}"
@@ -124,7 +145,6 @@ objects:
         - name: datasources-config
           secret:
             secretName: "${SECRET_NAME}"
-        
         terminationGracePeriodSeconds: 10
 - apiVersion: v1
   kind: Service

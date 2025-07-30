@@ -1,0 +1,69 @@
+{
+  "development": {
+    "description": "Local development with no authentication",
+    "mcpServers": {
+      "proms-mcp-dev": {
+        "url": "http://localhost:8000/mcp",
+        "description": "Development server - no auth required"
+      }
+    }
+  },
+  "production-local-token": {
+    "description": "Production with local OpenShift token",
+    "mcpServers": {
+      "proms-mcp": {
+        "url": "https://proms-mcp.apps.cluster.example.com/mcp",
+        "headers": {
+          "Authorization": "Bearer ${OPENSHIFT_TOKEN}"
+        },
+        "description": "Production server with bearer token auth"
+      }
+    },
+    "setup": [
+      "# Get your OpenShift token:",
+      "export OPENSHIFT_TOKEN=$(oc whoami -t)",
+      "# Or set it directly in the config above"
+    ]
+  },
+  "production-service-account": {
+    "description": "Production with service account token",
+    "mcpServers": {
+      "proms-mcp": {
+        "url": "https://proms-mcp.apps.cluster.example.com/mcp",
+        "headers": {
+          "Authorization": "Bearer sa-token-here"
+        },
+        "description": "Production server with service account token"
+      }
+    },
+    "setup": [
+      "# Create a service account and get its token:",
+      "oc create serviceaccount mcp-client",
+      "oc adm policy add-cluster-role-to-user view system:serviceaccount:$(oc project -q):mcp-client",
+      "# Get the token from the service account secret"
+    ]
+  },
+  "multi-environment": {
+    "description": "Multiple environments in one config",
+    "mcpServers": {
+      "proms-mcp-dev": {
+        "url": "http://localhost:8000/mcp",
+        "description": "Local development"
+      },
+      "proms-mcp-stage": {
+        "url": "https://proms-mcp.apps.stage.example.com/mcp",
+        "headers": {
+          "Authorization": "Bearer ${STAGE_TOKEN}"
+        },
+        "description": "Staging environment"
+      },
+      "proms-mcp-prod": {
+        "url": "https://proms-mcp.apps.prod.example.com/mcp",
+        "headers": {
+          "Authorization": "Bearer ${PROD_TOKEN}"
+        },
+        "description": "Production environment"
+      }
+    }
+  }
+} 

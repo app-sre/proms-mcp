@@ -1,0 +1,52 @@
+---
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: proms-mcp-on-push
+  annotations:
+    build.appstudio.openshift.io/repo: https://github.com/app-sre/proms-mcp?rev={{revision}}
+    build.appstudio.redhat.com/commit_sha: '{{revision}}'
+    build.appstudio.redhat.com/target_branch: '{{target_branch}}'
+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main"
+    pipelinesascode.tekton.dev/max-keep-runs: "25"
+  labels:
+    appstudio.openshift.io/application: proms-mcp
+    appstudio.openshift.io/component: proms-mcp
+    pipelines.appstudio.openshift.io/type: build
+spec:
+  params:
+    - name: git-url
+      value: '{{source_url}}'
+    - name: revision
+      value: '{{revision}}'
+    - name: output-image
+      value: quay.io/redhat-user-workloads/app-sre-tenant/proms-mcp/proms-mcp:{{revision}}
+    - name: dockerfile
+      value: Dockerfile
+    - name: path-context
+      value: .
+    - name: target-stage
+      value: prod
+  pipelineRef:
+    resolver: git
+    params:
+      - name: url
+        value: https://github.com/app-sre/shared-pipelines
+      - name: revision
+        value: main
+      - name: pathInRepo
+        value: pipelines/multi-arch-build-pipeline.yaml
+  taskRunTemplate:
+    serviceAccountName: build-pipeline-proms-mcp
+  workspaces:
+    - name: workspace
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 1Gi
+    - name: git-auth
+      secret:
+        secretName: '{{ git_auth_secret }}' 

@@ -1,0 +1,5 @@
+{
+  "extends": [
+    "github>app-sre/renovate-config"
+  ]
+} 

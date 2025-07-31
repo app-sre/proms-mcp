@@ -47,9 +47,32 @@ git clone <repository-url>
 cd proms-mcp
 make install
 
-# Run the server
+# Create datasource configuration
+cp local_config/datasources-example.yaml local_config/datasources.yaml
+# Edit local_config/datasources.yaml with your Prometheus instances
+
+# Run the server (no authentication - recommended for development)
 make run
-# Or: uv run python -m proms_mcp
+```
+
+**Authenticated mode** (for testing with OpenShift auth):
+```bash
+# Run with OpenShift authentication
+make run-auth OPENSHIFT_API_URL=https://api.cluster.example.com:6443
+```
+
+**Manual startup** (if not using make):
+```bash
+# Development mode (no authentication)
+export AUTH_MODE=none
+export GRAFANA_DATASOURCES_PATH=local_config/datasources.yaml
+uv run python -m proms_mcp
+
+# Authenticated mode
+export AUTH_MODE=active
+export OPENSHIFT_API_URL=https://api.cluster.example.com:6443
+export GRAFANA_DATASOURCES_PATH=local_config/datasources.yaml
+uv run python -m proms_mcp
 ```
 
 ### Container Development
@@ -69,25 +92,51 @@ podman run -p 8000:8000 \
 
 ### Cursor Integration
 
-Add to your Cursor settings (`Cursor Settings > Features > Rules for AI` or `.cursor/mcp.json` in your workspace):
+The server supports two authentication modes:
 
+**Development (No Authentication):**
 ```json
 {
   "mcpServers": {
-    "proms-mcp": {
-      "url": "http://localhost:8000/mcp"
+    "proms-mcp-dev": {
+      "url": "http://localhost:8000/mcp",
+      "description": "Development server - no authentication"
     }
   }
 }
 ```
 
+**Production (OpenShift Authentication):**
+```json
+{
+  "mcpServers": {
+    "proms-mcp": {
+      "url": "https://proms-mcp.apps.cluster.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer your-openshift-token-here"
+      },
+      "description": "Production server with OpenShift auth"
+    }
+  }
+}
+```
+
+> ⚠️ **Security Note**: Never commit `.cursor/mcp.json` with real tokens to git. It's already in `.gitignore`.
+
+See `.cursor/mcp-examples.json` for complete configuration examples including:
+- Development and production setups
+- Service account token configuration
+- Multi-environment configurations
+- SSL verification scenarios
+
 ### Other MCP Clients
 
 The server exposes MCP over HTTP at:
-- **Endpoint**: `POST http://localhost:8000/mcp`
+- **Endpoint**: `POST http://localhost:8000/mcp` (or your deployed URL)
 - **Protocol**: JSON-RPC 2.0 over HTTP
 - **Content-Type**: `application/json`
 - **Accept**: `application/json, text/event-stream`
+- **Authentication**: Bearer token in `Authorization` header (when `AUTH_MODE=active`)
 
 ## Configuration
 
@@ -99,6 +148,47 @@ The server exposes MCP over HTTP at:
 - `GRAFANA_DATASOURCES_PATH`: Path to datasource config file (default: /etc/grafana/provisioning/datasources/datasources.yaml)
 - `QUERY_TIMEOUT`: Query timeout in seconds (default: 30)
 - `SHUTDOWN_TIMEOUT_SECONDS`: Graceful shutdown timeout in seconds (default: 8)
+
+### Authentication Configuration
+
+The server supports two authentication modes:
+
+- `AUTH_MODE`: Authentication mode (`none` or `active`, default: `active`)
+- `OPENSHIFT_API_URL`: OpenShift API server URL (required for active auth)
+- `OPENSHIFT_SERVICE_ACCOUNT_TOKEN`: Service account token for API calls (for local development)
+- `OPENSHIFT_CA_CERT_PATH`: Path to CA certificate file for SSL verification (optional, only needed for custom certificates)
+- `OPENSHIFT_SSL_VERIFY`: Enable/disable SSL verification (`true`/`false`, default: `true`)
+- `AUTH_CACHE_TTL_SECONDS`: Authentication cache TTL in seconds (default: 300)
+
+#### No Authentication Mode (Development Only)
+
+```bash
+# Explicitly disable authentication for development
+AUTH_MODE=none uv run python -m proms_mcp
+```
+
+#### Active Authentication Mode (Default)
+
+```bash
+# Get your OpenShift token
+export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
+
+# Run with active authentication
+AUTH_MODE=active \
+OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
+OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$OPENSHIFT_SERVICE_ACCOUNT_TOKEN \
+uv run python -m proms_mcp
+
+# For self-signed certificates, you can:
+# 1. Disable SSL verification (INSECURE - development only):
+OPENSHIFT_SSL_VERIFY=false uv run python -m proms_mcp
+
+# 2. Or provide the CA certificate (if needed for custom certificates):
+OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt uv run python -m proms_mcp
+```
+
+**Required RBAC for Active Mode:**
+The server requires the `system:auth-delegator` ClusterRole to validate OpenShift tokens.
 
 ### Datasource Configuration
 
@@ -155,6 +245,81 @@ oc process -f openshift/deploy.yaml \
 - **GET /health**: Health check (port 8080)
 - **GET /metrics**: Prometheus metrics (port 8080)
 
+## Deployment
+
+### OpenShift Deployment
+
+Deploy using the provided OpenShift template:
+
+```bash
+# Development deployment (no authentication)
+oc process -f openshift/deploy.yaml \
+  -p IMAGE=quay.io/app-sre/proms-mcp \
+  -p IMAGE_TAG=latest \
+  -p AUTH_MODE=none \
+  | oc apply -f -
+
+# Production deployment (active authentication)
+oc process -f openshift/deploy.yaml \
+  -p IMAGE=quay.io/app-sre/proms-mcp \
+  -p IMAGE_TAG=v1.0.0 \
+  -p AUTH_MODE=active \
+  -p OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
+  | oc apply -f -
+
+# For active authentication, also create the required ClusterRoleBinding:
+oc create clusterrolebinding proms-mcp-auth-delegator \
+  --clusterrole=system:auth-delegator \
+  --serviceaccount=$(oc project -q):proms-mcp-server
+```
+
+**Template Parameters:**
+- `AUTH_MODE`: `none` (development) or `active` (production)
+- `OPENSHIFT_API_URL`: Required for active authentication mode
+- `AUTH_CACHE_TTL_SECONDS`: Token validation cache TTL (default: 300)
+
+### MCP Client Configuration
+
+#### Development Mode (No Authentication)
+```json
+{
+  "mcpServers": {
+    "proms-mcp-dev": {
+      "url": "http://localhost:8000/mcp"
+    }
+  }
+}
+```
+
+#### Production Mode (Bearer Token)
+```json
+{
+  "mcpServers": {
+    "proms-mcp": {
+      "url": "https://proms-mcp.apps.cluster.example.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${OPENSHIFT_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+Get your OpenShift token:
+```bash
+export OPENSHIFT_TOKEN=$(oc whoami -t)
+```
+
+### RBAC Requirements
+
+For production (active authentication) deployments, the server requires:
+
+1. **ServiceAccount**: `proms-mcp-server` (created by template)
+2. **ClusterRoleBinding**: Uses `system:auth-delegator` ClusterRole for token validation (must be created separately)
+3. **User Tokens**: Users need valid OpenShift tokens (`oc whoami -t`)
+
+The template creates the ServiceAccount. The ClusterRoleBinding must be created separately using the command shown above.
+
 ## Development
 
 ### Code Quality
@@ -167,20 +332,31 @@ make test            # Run tests with coverage
 ### Project Structure
 ```
 proms-mcp/
-  proms_mcp/           # Main package
-    server.py            # FastMCP server
-    client.py            # Prometheus API wrapper
-    config.py            # Config parser
-    monitoring.py        # Health/metrics endpoints
-  tests/                 # Test suite
-  openshift/deploy.yaml  # OpenShift template
+  proms_mcp/             # Main package
+    auth/                  # Authentication module
+      __init__.py            # AuthMode enum, User model
+      backends.py            # NoAuthBackend implementation
+      middleware.py          # Authentication middleware
+      models.py              # User and AuthBackend protocol
+    server.py              # FastMCP server
+    client.py              # Prometheus API wrapper
+    config.py              # Config parser with auth support
+    monitoring.py          # Health/metrics endpoints
+  tests/                   # Test suite
+    auth/                    # Authentication tests
+  openshift/deploy.yaml    # OpenShift template with auth support
+  .cursor/mcp.json         # MCP client configuration examples
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **No datasources loaded**: Check `GRAFANA_DATASOURCES_PATH` and YAML syntax
+1. **No datasources loaded**: 
+   - Check that `GRAFANA_DATASOURCES_PATH` points to your datasources file
+   - Verify YAML syntax is valid (JSON format is also supported)
+   - Ensure the file contains a `datasources` array with `type: "prometheus"` entries
+   - Use `make run` which automatically sets the path to `local_config/datasources.yaml`
 2. **Authentication failures**: Verify bearer tokens in `secureJsonData`
 3. **Query timeouts**: Adjust `QUERY_TIMEOUT` environment variable
 4. **Query validation errors**: Check query length and ensure non-empty queries

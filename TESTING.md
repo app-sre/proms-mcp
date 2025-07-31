@@ -9,11 +9,11 @@ This document provides examples for testing the Proms MCP server locally using c
    # No authentication mode (for development)
    AUTH_MODE=none python -m proms_mcp.server
    
-   # Active authentication mode (requires OpenShift token)
+   # Bearer token authentication mode (requires OpenShift token)
    AUTH_MODE=active OPENSHIFT_API_URL=https://api.your-cluster.com:6443 python -m proms_mcp.server
    ```
 
-2. **Get your OpenShift bearer token (for active mode):**
+2. **Get your OpenShift bearer token (for bearer token auth mode):**
    ```bash
    # Login to OpenShift
    oc login https://api.your-cluster.com:6443
@@ -59,7 +59,7 @@ curl -X POST http://localhost:8000/mcp \
 
 ## Testing with Bearer Token Authentication (AUTH_MODE=active)
 
-When running in active mode, all endpoints except `/health` and `/metrics` require authentication.
+When running in bearer token authentication mode, all endpoints except `/health` and `/metrics` require authentication.
 
 ### Health Check (No auth required)
 ```bash
@@ -255,13 +255,13 @@ curl -X POST http://localhost:8000/mcp \
 
 To use the server with Cursor IDE, configure your `.cursor/mcp.json` file:
 
-### For Active Authentication Mode
+### For Bearer Token Authentication Mode
 ```json
 {
   "mcpServers": {
     "proms-mcp": {
       "url": "http://localhost:8000/mcp?token=your-openshift-token-here",
-      "description": "Proms MCP Server with OpenShift authentication"
+      "description": "Proms MCP Server with OpenShift bearer token authentication"
     }
   }
 }
@@ -279,7 +279,7 @@ To use the server with Cursor IDE, configure your `.cursor/mcp.json` file:
 }
 ```
 
-**Note**: Cursor does not currently support the `headers` field for SSE connections, so the token must be passed in the URL query parameter when using active authentication mode.
+**Note**: Cursor does not currently support the `headers` field for SSE connections, so the token must be passed in the URL query parameter when using bearer token authentication mode.
 
 ## Environment Variables
 
@@ -290,7 +290,7 @@ Key environment variables for testing:
 export AUTH_MODE=none          # No authentication (dev only)
 export AUTH_MODE=active        # OpenShift bearer token auth
 
-# OpenShift configuration (for active mode)
+# OpenShift configuration (for bearer token auth mode)
 export OPENSHIFT_API_URL=https://api.your-cluster.com:6443
 export OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt  # Optional
 export OPENSHIFT_SSL_VERIFY=true               # Optional, default true

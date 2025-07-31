@@ -9,6 +9,7 @@ This server implements the MCP protocol using the modern FastMCP library, allowi
 ## Features
 
 - **Multiple Prometheus Support**: Query multiple Prometheus instances through a single interface
+- **Bearer Token Authentication**: Secure authentication using OpenShift bearer tokens
 - **Security Hardening**: Basic PromQL query validation for safety
 - **Comprehensive Toolset**: 8 MCP tools covering discovery, querying, and analysis using modern `@tool` decorators
 - **Observability**: Structured logging for debugging and monitoring
@@ -106,7 +107,7 @@ The server supports two authentication modes:
 }
 ```
 
-**Production (OpenShift Authentication):**
+**Production (Bearer Token Authentication):**
 ```json
 {
   "mcpServers": {
@@ -115,7 +116,7 @@ The server supports two authentication modes:
       "headers": {
         "Authorization": "Bearer your-openshift-token-here"
       },
-      "description": "Production server with OpenShift auth"
+      "description": "Production server with OpenShift bearer token auth"
     }
   }
 }
@@ -154,7 +155,7 @@ The server exposes MCP over HTTP at:
 The server supports two authentication modes:
 
 - `AUTH_MODE`: Authentication mode (`none` or `active`, default: `active`)
-- `OPENSHIFT_API_URL`: OpenShift API server URL (required for active auth)
+- `OPENSHIFT_API_URL`: OpenShift API server URL (required for bearer token auth)
 - `OPENSHIFT_SERVICE_ACCOUNT_TOKEN`: Service account token for API calls (for local development)
 - `OPENSHIFT_CA_CERT_PATH`: Path to CA certificate file for SSL verification (optional, only needed for custom certificates)
 - `OPENSHIFT_SSL_VERIFY`: Enable/disable SSL verification (`true`/`false`, default: `true`)
@@ -167,13 +168,13 @@ The server supports two authentication modes:
 AUTH_MODE=none uv run python -m proms_mcp
 ```
 
-#### Active Authentication Mode (Default)
+#### Bearer Token Authentication Mode (Default)
 
 ```bash
 # Get your OpenShift token
 export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
 
-# Run with active authentication
+# Run with bearer token authentication
 AUTH_MODE=active \
 OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
 OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$OPENSHIFT_SERVICE_ACCOUNT_TOKEN \
@@ -187,7 +188,7 @@ OPENSHIFT_SSL_VERIFY=false uv run python -m proms_mcp
 OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt uv run python -m proms_mcp
 ```
 
-**Required RBAC for Active Mode:**
+**Required RBAC for Bearer Token Authentication:**
 The server requires the `system:auth-delegator` ClusterRole to validate OpenShift tokens.
 
 ### Datasource Configuration
@@ -224,21 +225,6 @@ The server implements basic security checks:
 - **Empty Query**: Prevents empty or whitespace-only queries
 - **Input Sanitization**: Basic parameter encoding via httpx
 
-## Production Deployment
-
-### OpenShift
-
-```bash
-# Create datasource secret
-oc create secret generic prometheus-datasources \
-  --from-file=datasources.yaml=path/to/your/datasources.yaml
-
-# Deploy
-oc process -f openshift/deploy.yaml \
-  -p IMAGE=your-registry/proms-mcp \
-  -p IMAGE_TAG=v1.0.0 | oc apply -f -
-```
-
 ## API Endpoints
 
 - **POST /mcp**: MCP JSON-RPC 2.0 endpoint (port 8000)
@@ -259,7 +245,7 @@ oc process -f openshift/deploy.yaml \
   -p AUTH_MODE=none \
   | oc apply -f -
 
-# Production deployment (active authentication)
+# Production deployment (bearer token authentication)
 oc process -f openshift/deploy.yaml \
   -p IMAGE=quay.io/app-sre/proms-mcp \
   -p IMAGE_TAG=v1.0.0 \
@@ -267,7 +253,7 @@ oc process -f openshift/deploy.yaml \
   -p OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
   | oc apply -f -
 
-# For active authentication, also create the required ClusterRoleBinding:
+# For bearer token authentication, also create the required ClusterRoleBinding:
 oc create clusterrolebinding proms-mcp-auth-delegator \
   --clusterrole=system:auth-delegator \
   --serviceaccount=$(oc project -q):proms-mcp-server
@@ -275,7 +261,7 @@ oc create clusterrolebinding proms-mcp-auth-delegator \
 
 **Template Parameters:**
 - `AUTH_MODE`: `none` (development) or `active` (production)
-- `OPENSHIFT_API_URL`: Required for active authentication mode
+- `OPENSHIFT_API_URL`: Required for bearer token authentication mode
 - `AUTH_CACHE_TTL_SECONDS`: Token validation cache TTL (default: 300)
 
 ### MCP Client Configuration
@@ -312,7 +298,7 @@ export OPENSHIFT_TOKEN=$(oc whoami -t)
 
 ### RBAC Requirements
 
-For production (active authentication) deployments, the server requires:
+For production (bearer token authentication) deployments, the server requires:
 
 1. **ServiceAccount**: `proms-mcp-server` (created by template)
 2. **ClusterRoleBinding**: Uses `system:auth-delegator` ClusterRole for token validation (must be created separately)
@@ -379,6 +365,7 @@ curl http://localhost:8080/metrics | grep mcp_
 
 - **[SPECS.md](SPECS.md)** - Technical specification and architecture
 - **[LLM.md](LLM.md)** - Development guide for AI assistants
+- **[TESTING.md](TESTING.md)** - Local testing guide with bearer token examples
 
 ## Contributing
 

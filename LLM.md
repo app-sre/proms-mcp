@@ -1,5 +1,7 @@
 # LLM Development Guide for Proms MCP Server
 
+> **Note**: This file is also available as `GEMINI.md` and `.cursor/rules/LLM.md` (both are symlinks to this file).
+
 Essential workflow guidance for AI assistants working on this codebase.
 
 ## 🚀 Quick Commands
@@ -9,21 +11,28 @@ make test          # Run tests (ALWAYS run after changes)
 make format        # Format code 
 make lint          # Check code quality
 make run           # Start server (needs datasources.yaml)
+git --no-pager     # Use --no-pager flag for all git commands to avoid pagination
 ```
 
 ## 🎯 Core Rules
 
-### 1. Test-Driven Workflow
+### 1. LEAN Development Philosophy
+- **Don't reinvent the wheel** - Use existing, proven libraries when available
+- **Minimal viable changes** - Add functionality without over-engineering
+- **Build on solid foundations** - Extend existing working systems rather than replacing them
+- **Keep it simple** - Prefer straightforward solutions over complex architectures
+
+### 2. Test-Driven Workflow
 - **ALWAYS** run `make test` after any code change
 - Maintain >90% test coverage
 - Fix failing tests immediately - never leave them broken
 
-### 2. Code Quality Standards
+### 3. Code Quality Standards
 - Run `make format` then `make lint` before finishing
 - Zero tolerance for linting errors
 - All functions need type hints and docstrings
 
-### 3. Documentation Sync
+### 4. Documentation Sync
 - **LLM.md**: Update when changing development rules
 - **SPECS.md**: Update for architectural changes  
 - **README.md**: Update for user-facing changes
@@ -64,6 +73,8 @@ async def my_tool(param: str) -> str:
 - ❌ Add repetitive error handling (use decorators)
 - ❌ Change architecture without updating SPECS.md
 - ❌ Remove security validations
+- ❌ Reinvent functionality that exists in proven libraries
+- ❌ Over-engineer simple solutions
 
 ## ✅ Always Do
 
@@ -72,6 +83,9 @@ async def my_tool(param: str) -> str:
 - ✅ Add tests for new functionality
 - ✅ Keep documentation synchronized
 - ✅ Follow established code patterns
+- ✅ Use `git --no-pager` for all git commands
+- ✅ Research existing libraries before building custom solutions
+- ✅ Extend existing systems rather than replacing them
 
 ## 🔧 File Structure
 

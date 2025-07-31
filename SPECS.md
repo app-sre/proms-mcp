@@ -226,7 +226,7 @@ This ensures reliable shutdown behavior even with persistent client connections 
 ## Security Considerations
 
 ### Authentication
-- **MCP Endpoint**: Unauthenticated (internal cluster access)
+- **MCP Endpoint**: Bearer token authentication using OpenShift tokens
 - **Prometheus Connections**: Bearer token authentication only using credentials from Grafana datasource config
 - Authentication via `jsonData.httpHeaderName1` and `secureJsonData.httpHeaderValue1` fields
 - No credential storage beyond runtime memory

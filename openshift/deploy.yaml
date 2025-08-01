@@ -35,14 +35,13 @@ parameters:
   value: "8"
 - name: SECRET_NAME
   description: "Name of the secret containing datasource configuration"
-  value: "prometheus-datasources"
+  value: "grafana-datasources"
 - name: AUTH_MODE
   description: "Authentication mode (none, active)"
   value: "active"
 - name: OPENSHIFT_API_URL
   description: "OpenShift API server URL for token validation (required for active auth)"
-  value: "kubernetes.default.svc"
-  required: false
+  value: "https://kubernetes.default.svc"
 - name: AUTH_CACHE_TTL_SECONDS
   description: "Authentication cache TTL in seconds"
   value: "300"
@@ -51,7 +50,7 @@ parameters:
   required: false
 - name: OPENSHIFT_CA_CERT_PATH
   description: "Path to CA certificate file for SSL verification (optional, only needed for custom certificates)"
-  required: false
+  value: /run/secrets/kubernetes.io/serviceaccount/ca.crt
 - name: OPENSHIFT_SSL_VERIFY
   description: "Enable/disable SSL verification (true/false)"
   value: "true"

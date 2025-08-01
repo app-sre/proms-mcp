@@ -2,7 +2,7 @@
 apiVersion: tekton.dev/v1
 kind: PipelineRun
 metadata:
-  name: proms-mcp-on-push
+  name: proms-mcp-main-on-push
   annotations:
     build.appstudio.openshift.io/repo: https://github.com/app-sre/proms-mcp?rev={{revision}}
     build.appstudio.redhat.com/commit_sha: '{{revision}}'
@@ -10,8 +10,8 @@ metadata:
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch == "main"
     pipelinesascode.tekton.dev/max-keep-runs: "25"
   labels:
-    appstudio.openshift.io/application: proms-mcp
-    appstudio.openshift.io/component: proms-mcp
+    appstudio.openshift.io/application: proms-mcp-main
+    appstudio.openshift.io/component: proms-mcp-main
     pipelines.appstudio.openshift.io/type: build
 spec:
   params:
@@ -20,7 +20,7 @@ spec:
     - name: revision
       value: '{{revision}}'
     - name: output-image
-      value: quay.io/redhat-user-workloads/app-sre-tenant/proms-mcp/proms-mcp:{{revision}}
+      value: quay.io/redhat-user-workloads/app-sre-tenant/proms-mcp-main/proms-mcp-main:{{revision}}
     - name: dockerfile
       value: Dockerfile
     - name: path-context
@@ -37,7 +37,7 @@ spec:
       - name: pathInRepo
         value: pipelines/multi-arch-build-pipeline.yaml
   taskRunTemplate:
-    serviceAccountName: build-pipeline-proms-mcp
+    serviceAccountName: build-pipeline-proms-mcp-main
   workspaces:
     - name: workspace
       volumeClaimTemplate:

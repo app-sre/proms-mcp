@@ -2,7 +2,7 @@
 # Uses Red Hat UBI as base image with Python
 
 # Base stage with Red Hat UBI Python image
-FROM registry.redhat.io/ubi9/python-312:9.6-1753200829@sha256:95ec8d3ee9f875da011639213fd254256c29bc58861ac0b11f290a291fa04435 AS base
+FROM registry.access.redhat.com/ubi9/python-312:9.6-1753200829@sha256:95ec8d3ee9f875da011639213fd254256c29bc58861ac0b11f290a291fa04435 AS base
 
 # Set working directory
 WORKDIR /app

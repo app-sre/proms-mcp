@@ -33,9 +33,6 @@ parameters:
 - name: SHUTDOWN_TIMEOUT_SECONDS
   description: "Graceful shutdown timeout in seconds"
   value: "8"
-- name: HEALTH_METRICS_PORT
-  description: "Health and metrics server port"
-  value: "8080"
 - name: SECRET_NAME
   description: "Name of the secret containing datasource configuration"
   value: "prometheus-datasources"
@@ -60,6 +57,10 @@ parameters:
 - name: NAMESPACE
   description: "Namespace where the service account is created"
   required: true
+- name: HOSTNAME
+  description: "Hostname for the route"
+  required: true
+
 objects:
 - apiVersion: v1
   kind: ServiceAccount
@@ -67,6 +68,7 @@ objects:
     name: proms-mcp-server
     labels:
       app: proms-mcp-server
+
 - apiVersion: rbac.authorization.k8s.io/v1
   kind: ClusterRoleBinding
   metadata:
@@ -81,6 +83,7 @@ objects:
     kind: ClusterRole
     name: system:auth-delegator
     apiGroup: rbac.authorization.k8s.io
+
 - apiVersion: apps/v1
   kind: Deployment
   metadata:
@@ -111,6 +114,8 @@ objects:
           env:
           - name: PORT
             value: "8000"
+          - name: HEALTH_METRICS_PORT
+            value: "8080"
           - name: LOG_LEVEL
             value: "${LOG_LEVEL}"
           - name: GRAFANA_DATASOURCES_PATH
@@ -119,8 +124,6 @@ objects:
             value: "${QUERY_TIMEOUT}"
           - name: SHUTDOWN_TIMEOUT_SECONDS
             value: "${SHUTDOWN_TIMEOUT_SECONDS}"
-          - name: HEALTH_METRICS_PORT
-            value: "${HEALTH_METRICS_PORT}"
           - name: AUTH_MODE
             value: "${AUTH_MODE}"
           - name: OPENSHIFT_API_URL
@@ -178,6 +181,7 @@ objects:
           secret:
             secretName: "${SECRET_NAME}"
         terminationGracePeriodSeconds: 10
+
 - apiVersion: v1
   kind: Service
   metadata:
@@ -185,6 +189,7 @@ objects:
     labels:
       app: proms-mcp-server
   spec:
+    type: ClusterIP
     ports:
     - name: mcp
       port: 8000
@@ -196,7 +201,30 @@ objects:
       targetPort: 8080
     selector:
       app: proms-mcp-server
-    type: ClusterIP
+
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    annotations:
+      cert-manager.io/issuer-kind: ClusterIssuer
+      cert-manager.io/issuer-name: letsencrypt-devshiftnet-dns
+      haproxy.router.openshift.io/timeout: 1m
+    name: proms-mcp-server
+    labels:
+      app: proms-mcp-server
+  spec:
+    host: ${HOSTNAME}
+    to:
+      kind: Service
+      name: proms-mcp-server
+      weight: 100
+    port:
+      targetPort: mcp
+    tls:
+      insecureEdgeTerminationPolicy: Redirect
+      termination: edge
+  wildcardPolicy: None
+
 - apiVersion: policy/v1
   kind: PodDisruptionBudget
   metadata:

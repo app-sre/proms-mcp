@@ -599,7 +599,7 @@ def main() -> None:
     start_health_metrics_server(metrics_data)
 
     # Get configuration from environment
-    host = os.getenv("HOST", "127.0.0.1")
+    host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
     timeout_graceful_shutdown = int(os.getenv("SHUTDOWN_TIMEOUT_SECONDS", "8"))
 

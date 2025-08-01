@@ -296,7 +296,7 @@ export OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt  # Optional
 export OPENSHIFT_SSL_VERIFY=true               # Optional, default true
 
 # Server configuration
-export HOST=127.0.0.1          # Default
+export HOST=0.0.0.0            # Default - binds to all interfaces
 export PORT=8000               # Default
 export GRAFANA_DATASOURCES_PATH=/path/to/datasources.yaml
 ``` 

@@ -68,4 +68,4 @@ EXPOSE 8000 8080
 # Health check handled by OpenShift probes
 
 # Run the FastMCP server
-CMD ["uv", "run", "python", "-m", "proms_mcp"] 
+CMD ["/app/.venv/bin/python", "-m", "proms_mcp"]

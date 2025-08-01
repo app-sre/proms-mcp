@@ -41,6 +41,7 @@ parameters:
   value: "active"
 - name: OPENSHIFT_API_URL
   description: "OpenShift API server URL for token validation (required for active auth)"
+  value: "kubernetes.default.svc"
   required: false
 - name: AUTH_CACHE_TTL_SECONDS
   description: "Authentication cache TTL in seconds"

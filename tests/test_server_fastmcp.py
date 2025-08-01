@@ -691,7 +691,7 @@ class TestFastMCPIntegration:
 
                 # Check default parameters
                 call_args = mock_uvicorn_run.call_args
-                assert call_args[1]["host"] == "127.0.0.1"  # default
+                assert call_args[1]["host"] == "0.0.0.0"  # default
                 assert call_args[1]["port"] == 8000  # default
                 assert call_args[1]["timeout_graceful_shutdown"] == 8  # default
 

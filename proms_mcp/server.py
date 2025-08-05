@@ -14,6 +14,8 @@ from typing import Any
 
 import structlog
 from fastmcp import FastMCP
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from .auth import AuthMode
 from .auth.backends import NoAuthBackend
@@ -36,6 +38,39 @@ app: FastMCP = FastMCP(
     instructions="A lean MCP server providing access to multiple Prometheus instances for metrics analysis and SRE operations.",
     stateless_http=True,
 )
+
+
+# OAuth well-known endpoints for MCP client compatibility
+@app.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
+async def oauth_protected_resource(request: Request) -> JSONResponse:
+    """OAuth 2.0 protected resource metadata endpoint."""
+    return JSONResponse(
+        {
+            "resource_server": "proms-mcp",
+            "authorization_server": str(request.base_url).rstrip("/"),
+            "scopes_supported": ["read", "write"],
+            "bearer_methods_supported": ["header"],
+            "resource_documentation": str(request.base_url).rstrip("/") + "/health",
+        }
+    )
+
+
+@app.custom_route("/.well-known/oauth-authorization-server", methods=["GET"])
+async def oauth_authorization_server(request: Request) -> JSONResponse:
+    """OAuth 2.0 authorization server metadata endpoint."""
+    base_url = str(request.base_url).rstrip("/")
+    return JSONResponse(
+        {
+            "issuer": base_url,
+            "authorization_endpoint": base_url + "/auth",
+            "token_endpoint": base_url + "/token",
+            "scopes_supported": ["read", "write"],
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code", "bearer"],
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "bearer"],
+        }
+    )
+
 
 # Global readiness state for graceful shutdown
 server_ready = True

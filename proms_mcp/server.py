@@ -14,7 +14,7 @@ from functools import wraps
 from typing import Any
 
 import structlog
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from .auth import AuthMode
 from .auth.backends import NoAuthBackend
@@ -32,7 +32,7 @@ logger = structlog.get_logger()
 # Initialize FastMCP server
 # stateless_http=True prevents "No valid session ID provided" errors when clients
 # like Cursor try to reconnect after server restarts
-app = FastMCP(
+app: FastMCP = FastMCP(
     name="proms-mcp",
     instructions="A lean MCP server providing access to multiple Prometheus instances for metrics analysis and SRE operations.",
     stateless_http=True,

@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
+from fastmcp import Client
 
 from proms_mcp.config import PrometheusDataSource
 from proms_mcp.server import (
@@ -89,7 +90,8 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_list_tools(self) -> None:
         """Test that all 8 tools are registered."""
-        tools = await app.list_tools()
+        async with Client(app) as client:
+            tools = await client.list_tools()
 
         assert len(tools) == 8
 
@@ -116,16 +118,15 @@ class TestFastMCPServer:
                 "test-prometheus": Mock(url="https://prometheus.example.com")
             }
 
-            result = await app.call_tool("list_datasources", {})
+            async with Client(app) as client:
+                result = await client.call_tool("list_datasources", {})
 
-            # FastMCP returns a tuple where first element is list of content blocks
-            assert isinstance(result, tuple)
-            assert len(result) > 0
-            assert isinstance(result[0], list)
-            assert len(result[0]) > 0
+            # FastMCP 2.x returns a CallToolResult with content list
+            assert hasattr(result, "content")
+            assert len(result.content) > 0
 
             # Parse the JSON response
-            response_text = result[0][0].text
+            response_text = result.content[0].text
             response_data = json.loads(response_text)
 
             assert response_data["status"] == "success"
@@ -150,13 +151,14 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "query_instant",
-                    {"datasource_id": "test-prometheus", "promql": "up"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "query_instant",
+                        {"datasource_id": "test-prometheus", "promql": "up"},
+                    )
 
                 # Parse the JSON response
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -181,19 +183,20 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "query_range",
-                    {
-                        "datasource_id": "test-prometheus",
-                        "promql": "up",
-                        "start": "2024-01-01T00:00:00Z",
-                        "end": "2024-01-01T01:00:00Z",
-                        "step": "1m",
-                    },
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "query_range",
+                        {
+                            "datasource_id": "test-prometheus",
+                            "promql": "up",
+                            "start": "2024-01-01T00:00:00Z",
+                            "end": "2024-01-01T01:00:00Z",
+                            "step": "1m",
+                        },
+                    )
 
                 # Parse the JSON response
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -206,12 +209,13 @@ class TestFastMCPServer:
         with patch("proms_mcp.server.config_loader") as mock_config:
             mock_config.get_datasource.return_value = None  # Datasource not found
 
-            result = await app.call_tool(
-                "query_instant", {"datasource_id": "nonexistent", "promql": "up"}
-            )
+            async with Client(app) as client:
+                result = await client.call_tool(
+                    "query_instant", {"datasource_id": "nonexistent", "promql": "up"}
+                )
 
             # Parse the JSON response
-            response_text = result[0][0].text  # type: ignore[index]
+            response_text = result.content[0].text
             response_data = json.loads(response_text)
 
             assert response_data["status"] == "error"
@@ -261,11 +265,12 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "list_metrics", {"datasource_id": "test-prometheus"}
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "list_metrics", {"datasource_id": "test-prometheus"}
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -289,11 +294,12 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "list_metrics", {"datasource_id": "test-prometheus"}
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "list_metrics", {"datasource_id": "test-prometheus"}
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "error"
@@ -316,12 +322,13 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "get_metric_metadata",
-                    {"datasource_id": "test-prometheus", "metric_name": "up"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "get_metric_metadata",
+                        {"datasource_id": "test-prometheus", "metric_name": "up"},
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -357,12 +364,13 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "get_metric_labels",
-                    {"datasource_id": "test-prometheus", "metric_name": "up"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "get_metric_labels",
+                        {"datasource_id": "test-prometheus", "metric_name": "up"},
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -389,12 +397,13 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "get_label_values",
-                    {"datasource_id": "test-prometheus", "label_name": "job"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "get_label_values",
+                        {"datasource_id": "test-prometheus", "label_name": "job"},
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -417,12 +426,13 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "find_metrics_by_pattern",
-                    {"datasource_id": "test-prometheus", "pattern": ".*usage"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "find_metrics_by_pattern",
+                        {"datasource_id": "test-prometheus", "pattern": ".*usage"},
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -449,12 +459,13 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                result = await app.call_tool(
-                    "find_metrics_by_pattern",
-                    {"datasource_id": "test-prometheus", "pattern": "[invalid"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "find_metrics_by_pattern",
+                        {"datasource_id": "test-prometheus", "pattern": "[invalid"},
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "error"
@@ -578,7 +589,8 @@ class TestFastMCPIntegration:
             initialize_server()
 
             # Verify tools are registered
-            tools = await app.list_tools()
+            async with Client(app) as client:
+                tools = await client.list_tools()
             assert len(tools) == 8
 
     def test_server_stateless_configuration(self) -> None:
@@ -719,13 +731,13 @@ class TestFastMCPIntegration:
                 call_args = mock_uvicorn_run.call_args
                 assert call_args[1]["timeout_graceful_shutdown"] == 15
 
-    def test_list_datasources_with_no_config_loader(self) -> None:
+    @pytest.mark.asyncio
+    async def test_list_datasources_with_no_config_loader(self) -> None:
         """Test list_datasources when config_loader is None."""
         with patch("proms_mcp.server.config_loader", None):
-            from proms_mcp.server import list_datasources
-
-            result = list_datasources()
-            data = json.loads(result)
+            async with Client(app) as client:
+                result = await client.call_tool("list_datasources", {})
+            data = json.loads(result.content[0].text)
 
             assert data["status"] == "error"
             assert "not initialized" in data["error"]
@@ -781,12 +793,13 @@ class TestFastMCPIntegration:
                 mock_get_client.return_value = mock_client
 
                 # Test get_label_values without optional metric_name parameter
-                result = await app.call_tool(
-                    "get_label_values",
-                    {"datasource_id": "test-prometheus", "label_name": "job"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "get_label_values",
+                        {"datasource_id": "test-prometheus", "label_name": "job"},
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -810,12 +823,13 @@ class TestFastMCPIntegration:
                 mock_get_client.return_value = mock_client
 
                 # Test without time parameter
-                result = await app.call_tool(
-                    "query_instant",
-                    {"datasource_id": "test-prometheus", "promql": "up"},
-                )
+                async with Client(app) as client:
+                    result = await client.call_tool(
+                        "query_instant",
+                        {"datasource_id": "test-prometheus", "promql": "up"},
+                    )
 
-                response_text = result[0][0].text  # type: ignore[index]
+                response_text = result.content[0].text
                 response_data = json.loads(response_text)
 
                 assert response_data["status"] == "success"
@@ -944,8 +958,9 @@ class TestFastMCPIntegration:
                 ]
 
                 for tool_name, params in tools_to_test:
-                    result = await app.call_tool(tool_name, params)
-                    response_text = result[0][0].text  # type: ignore[index]
+                    async with Client(app) as client:
+                        result = await client.call_tool(tool_name, params)
+                    response_text = result.content[0].text
                     response_data = json.loads(response_text)
 
                     # All should return error status, not crash

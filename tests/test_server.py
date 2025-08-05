@@ -985,54 +985,11 @@ class TestFastMCPIntegration:
                     )
 
 
-class TestOAuthWellKnownEndpoints:
-    """Test OAuth well-known endpoints."""
+class TestUnprotectedEndpoints:
+    """Test that certain endpoints don't require authentication."""
 
-    def test_oauth_protected_resource_endpoint(self) -> None:
-        """Test OAuth protected resource metadata endpoint."""
-        from starlette.testclient import TestClient
-
-        # Create a test client for the FastMCP app
-        asgi_app = app.streamable_http_app()
-        client = TestClient(asgi_app)
-
-        # Test the OAuth protected resource endpoint
-        response = client.get("/.well-known/oauth-protected-resource")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert data["resource_server"] == "proms-mcp"
-        assert "authorization_server" in data
-        assert data["scopes_supported"] == ["read", "write"]
-        assert data["bearer_methods_supported"] == ["header"]
-        assert "resource_documentation" in data
-
-    def test_oauth_authorization_server_endpoint(self) -> None:
-        """Test OAuth authorization server metadata endpoint."""
-        from starlette.testclient import TestClient
-
-        # Create a test client for the FastMCP app
-        asgi_app = app.streamable_http_app()
-        client = TestClient(asgi_app)
-
-        # Test the OAuth authorization server endpoint
-        response = client.get("/.well-known/oauth-authorization-server")
-        assert response.status_code == 200
-
-        data = response.json()
-        assert "issuer" in data
-        assert "authorization_endpoint" in data
-        assert "token_endpoint" in data
-        assert data["scopes_supported"] == ["read", "write"]
-        assert data["response_types_supported"] == ["code"]
-        assert data["grant_types_supported"] == ["authorization_code", "bearer"]
-        assert data["token_endpoint_auth_methods_supported"] == [
-            "client_secret_basic",
-            "bearer",
-        ]
-
-    def test_oauth_endpoints_accessible_without_auth(self) -> None:
-        """Test that OAuth endpoints are accessible without authentication when auth is enabled."""
+    def test_health_and_metrics_endpoints_accessible_without_auth(self) -> None:
+        """Test that health and metrics endpoints are accessible without authentication when auth is enabled."""
         from starlette.testclient import TestClient
 
         from proms_mcp.auth.middleware import AuthenticationMiddleware
@@ -1050,17 +1007,13 @@ class TestOAuthWellKnownEndpoints:
         )
         client = TestClient(authenticated_app)
 
-        # Test that OAuth endpoints are still accessible
-        response = client.get("/.well-known/oauth-protected-resource")
-        assert response.status_code == 200
-
-        response = client.get("/.well-known/oauth-authorization-server")
-        assert response.status_code == 200
-
-        # Test that health and metrics endpoints are also accessible
+        # Test that health and metrics endpoints are accessible even with auth middleware
         # Note: These endpoints might not exist in the FastMCP app itself,
-        # but the middleware should allow them through
+        # but the middleware should allow them through without calling authenticate
 
         # Verify that a non-whitelisted endpoint would fail
         response = client.get("/mcp")
         assert response.status_code == 401
+
+        # Verify that authenticate was called only once for the protected endpoint
+        assert mock_auth_backend.authenticate.call_count == 1

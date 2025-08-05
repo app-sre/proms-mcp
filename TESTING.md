@@ -5,6 +5,7 @@ This document provides examples for testing the Proms MCP server locally using c
 ## Prerequisites
 
 1. **Start the server locally:**
+
    ```bash
    # No authentication mode (for development)
    AUTH_MODE=none python -m proms_mcp.server
@@ -14,6 +15,7 @@ This document provides examples for testing the Proms MCP server locally using c
    ```
 
 2. **Get your OpenShift bearer token (for bearer token auth mode):**
+
    ```bash
    # Login to OpenShift
    oc login https://api.your-cluster.com:6443
@@ -28,11 +30,13 @@ This document provides examples for testing the Proms MCP server locally using c
 When running in no-auth mode, you can test all endpoints without authentication:
 
 ### Health Check
+
 ```bash
 curl -X GET http://localhost:8000/health
 ```
 
 ### MCP Protocol Endpoints
+
 ```bash
 # List tools
 curl -X POST http://localhost:8000/mcp \
@@ -62,11 +66,13 @@ curl -X POST http://localhost:8000/mcp \
 When running in bearer token authentication mode, all endpoints except `/health` and `/metrics` require authentication.
 
 ### Health Check (No auth required)
+
 ```bash
 curl -X GET http://localhost:8080/health
 ```
 
 ### Metrics (No auth required)
+
 ```bash
 curl -X GET http://localhost:8080/metrics
 ```
@@ -76,6 +82,7 @@ curl -X GET http://localhost:8080/metrics
 The server supports authentication via both Authorization header and query parameter:
 
 #### Using Authorization Header
+
 ```bash
 # Set your token
 export TOKEN="your-openshift-token-here"
@@ -140,6 +147,7 @@ curl -X POST http://localhost:8000/mcp \
 ## Testing Authentication Failures
 
 ### Missing Token (should return 401)
+
 ```bash
 curl -X POST http://localhost:8000/mcp \
   -H "Content-Type: application/json" \
@@ -151,6 +159,7 @@ curl -X POST http://localhost:8000/mcp \
 ```
 
 Expected response:
+
 ```json
 {
   "error": "Authentication required"
@@ -158,6 +167,7 @@ Expected response:
 ```
 
 ### Invalid Token (should return 401)
+
 ```bash
 curl -X POST http://localhost:8000/mcp \
   -H "Content-Type: application/json" \
@@ -169,11 +179,10 @@ curl -X POST http://localhost:8000/mcp \
   }'
 ```
 
-
-
 ## Common Test Scenarios
 
 ### 1. Basic Server Functionality
+
 ```bash
 # Test server is running
 curl -X GET http://localhost:8000/health
@@ -183,6 +192,7 @@ curl -X GET http://localhost:8000/metrics
 ```
 
 ### 2. Authentication Flow Test
+
 ```bash
 # Get OpenShift token
 TOKEN=$(oc whoami -t)
@@ -199,6 +209,7 @@ curl -X POST http://localhost:8000/mcp \
 ```
 
 ### 3. Tool Functionality Test
+
 ```bash
 # List available datasources
 curl -X POST http://localhost:8000/mcp \
@@ -234,28 +245,30 @@ curl -X POST http://localhost:8000/mcp \
 ## Troubleshooting
 
 ### 401 Authentication Required
+
 - Verify you're using the correct token: `oc whoami -t`
 - Check token is not expired: `oc whoami`
 - Ensure you're including the `Authorization: Bearer` header
 - Verify AUTH_MODE is set correctly
 
 ### Connection Refused
+
 - Check server is running: `ps aux | grep proms_mcp`
 - Verify port is correct (default 8000)
 - Check server logs for errors
 
 ### Invalid JSON-RPC
+
 - Ensure Content-Type is `application/json`
 - Verify JSON syntax is valid
 - Check method names match available tools
-
-
 
 ## Cursor Configuration
 
 To use the server with Cursor IDE, configure your `.cursor/mcp.json` file:
 
 ### For Bearer Token Authentication Mode
+
 ```json
 {
   "mcpServers": {
@@ -268,6 +281,7 @@ To use the server with Cursor IDE, configure your `.cursor/mcp.json` file:
 ```
 
 ### For No-Auth Mode
+
 ```json
 {
   "mcpServers": {
@@ -299,4 +313,4 @@ export OPENSHIFT_SSL_VERIFY=true               # Optional, default true
 export HOST=0.0.0.0            # Default - binds to all interfaces
 export PORT=8000               # Default
 export GRAFANA_DATASOURCES_PATH=/path/to/datasources.yaml
-``` 
+```

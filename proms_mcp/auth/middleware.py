@@ -21,10 +21,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Any, call_next: Any) -> Any:
         """Process request with authentication."""
         # Skip authentication for health checks and metrics endpoints
-        if request.url.path in [
-            "/health",
-            "/metrics"
-        ]:
+        if request.url.path in ["/health", "/metrics"]:
             return await call_next(request)
 
         # Authenticate request
@@ -38,7 +35,7 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
                 path=request.url.path,
                 full_url=str(request.url),
                 has_auth_header=bool(auth_header),
-                auth_header_prefix=auth_header[:20] if auth_header else None
+                auth_header_prefix=auth_header[:20] if auth_header else None,
             )
             return JSONResponse(
                 status_code=401, content={"error": "Authentication required"}
@@ -46,6 +43,8 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
         # Add user to request state
         request.state.user = user
-        logger.info("Authentication successful", user=user.username, path=request.url.path)
+        logger.info(
+            "Authentication successful", user=user.username, path=request.url.path
+        )
 
         return await call_next(request)

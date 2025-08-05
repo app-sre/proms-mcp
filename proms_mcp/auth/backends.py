@@ -25,5 +25,5 @@ class NoAuthBackend(AuthBackend):
             username="dev-user",
             uid="dev-user-id",
             groups=["developers"],
-            auth_method="none"
+            auth_method="none",
         )

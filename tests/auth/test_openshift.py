@@ -162,8 +162,13 @@ class TestOpenShiftClient:
     def test_ssl_verify_config_custom_ca(self) -> None:
         """Test SSL verification with custom CA certificate."""
         import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.crt', delete=False) as temp_ca:
-            temp_ca.write("-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----")
+
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".crt", delete=False
+        ) as temp_ca:
+            temp_ca.write(
+                "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----"
+            )
             temp_ca_path = temp_ca.name
 
         try:

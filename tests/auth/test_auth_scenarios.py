@@ -2,7 +2,6 @@
 
 import os
 import tempfile
-from pathlib import Path
 from unittest.mock import AsyncMock, Mock, mock_open, patch
 
 import httpx
@@ -52,7 +51,10 @@ class TestBearerTokenAuthScenarios:
         """Set up test fixtures."""
         self.api_url = "https://api.cluster.example.com:6443"
         self.mock_user = User(
-            username="testuser", uid="user-123", groups=["developers"], auth_method="active"
+            username="testuser",
+            uid="user-123",
+            groups=["developers"],
+            auth_method="active",
         )
 
     @pytest.mark.asyncio
@@ -124,8 +126,12 @@ class TestBearerTokenAuthScenarios:
     async def test_bearer_token_ssl_verify_custom_cert(self) -> None:
         """Test bearer token auth with SSL verify using custom CA certificate."""
         # Create a temporary CA certificate file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.crt', delete=False) as temp_ca:
-            temp_ca.write("-----BEGIN CERTIFICATE-----\nfake cert content\n-----END CERTIFICATE-----")
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".crt", delete=False
+        ) as temp_ca:
+            temp_ca.write(
+                "-----BEGIN CERTIFICATE-----\nfake cert content\n-----END CERTIFICATE-----"
+            )
             temp_ca_path = temp_ca.name
 
         try:
@@ -163,7 +169,9 @@ class TestBearerTokenAuthScenarios:
     @pytest.mark.asyncio
     async def test_bearer_token_ssl_verify_custom_cert_missing(self) -> None:
         """Test bearer token auth when custom CA cert path is set but file doesn't exist."""
-        with patch.dict("os.environ", {"OPENSHIFT_CA_CERT_PATH": "/nonexistent/ca.crt"}):
+        with patch.dict(
+            "os.environ", {"OPENSHIFT_CA_CERT_PATH": "/nonexistent/ca.crt"}
+        ):
             client = OpenShiftClient(self.api_url)
             backend = BearerTokenBackend(client)
 
@@ -196,8 +204,6 @@ class TestBearerTokenAuthScenarios:
         """Test bearer token auth from pod using internal OpenShift API and mounted CA cert."""
         # Simulate in-pod environment
         internal_api_url = "https://kubernetes.default.svc:443"
-        pod_ca_cert_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
-        pod_token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 
         # Create temporary files to simulate pod-mounted files
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -205,18 +211,20 @@ class TestBearerTokenAuthScenarios:
             temp_token_path = os.path.join(temp_dir, "token")
 
             # Create mock CA cert file
-            with open(temp_ca_path, 'w') as f:
-                f.write("-----BEGIN CERTIFICATE-----\nmock CA cert\n-----END CERTIFICATE-----")
+            with open(temp_ca_path, "w") as f:
+                f.write(
+                    "-----BEGIN CERTIFICATE-----\nmock CA cert\n-----END CERTIFICATE-----"
+                )
 
             # Create mock service account token file
-            with open(temp_token_path, 'w') as f:
+            with open(temp_token_path, "w") as f:
                 f.write("mock-service-account-token")
 
             # Test with pod-like configuration
             client = OpenShiftClient(
                 api_url=internal_api_url,
                 service_account_token_path=temp_token_path,
-                ca_cert_path=temp_ca_path
+                ca_cert_path=temp_ca_path,
             )
             backend = BearerTokenBackend(client)
 
@@ -248,7 +256,9 @@ class TestBearerTokenAuthScenarios:
                 # Verify it uses the internal API URL
                 mock_async_client.get.assert_called_once()
                 get_call_args = mock_async_client.get.call_args
-                assert internal_api_url in get_call_args[0][0]  # URL contains internal API
+                assert (
+                    internal_api_url in get_call_args[0][0]
+                )  # URL contains internal API
 
     @pytest.mark.asyncio
     async def test_bearer_token_ssl_verify_from_pod_default_paths(self) -> None:
@@ -263,7 +273,10 @@ class TestBearerTokenAuthScenarios:
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.json.return_value = {
-                "metadata": {"name": "system:serviceaccount:default:myapp", "uid": "sa-123"},
+                "metadata": {
+                    "name": "system:serviceaccount:default:myapp",
+                    "uid": "sa-123",
+                },
                 "groups": ["system:serviceaccounts", "system:serviceaccounts:default"],
             }
 
@@ -283,7 +296,10 @@ class TestBearerTokenAuthScenarios:
                 # Verify API call was made with user token for validation
                 mock_async_client.get.assert_called_once()
                 call_args = mock_async_client.get.call_args
-                assert call_args[1]["headers"]["Authorization"] == "Bearer user-bearer-token"
+                assert (
+                    call_args[1]["headers"]["Authorization"]
+                    == "Bearer user-bearer-token"
+                )
 
     @pytest.mark.asyncio
     async def test_bearer_token_ssl_verify_environment_variables(self) -> None:
@@ -295,27 +311,38 @@ class TestBearerTokenAuthScenarios:
         ]
 
         for env_value, expected_verify in test_cases:
-            with patch.dict("os.environ", {"OPENSHIFT_SSL_VERIFY": env_value}, clear=False):
+            with patch.dict(
+                "os.environ", {"OPENSHIFT_SSL_VERIFY": env_value}, clear=False
+            ):
                 client = OpenShiftClient(self.api_url)
                 ssl_config = client._get_ssl_verify_config()
-                
-                assert ssl_config == expected_verify, f"Failed for OPENSHIFT_SSL_VERIFY={env_value}"
+
+                assert ssl_config == expected_verify, (
+                    f"Failed for OPENSHIFT_SSL_VERIFY={env_value}"
+                )
 
     def test_ssl_verify_config_custom_ca_priority(self) -> None:
         """Test that custom CA cert takes priority over SSL verify env var."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.crt', delete=False) as temp_ca:
-            temp_ca.write("-----BEGIN CERTIFICATE-----\ntest cert\n-----END CERTIFICATE-----")
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".crt", delete=False
+        ) as temp_ca:
+            temp_ca.write(
+                "-----BEGIN CERTIFICATE-----\ntest cert\n-----END CERTIFICATE-----"
+            )
             temp_ca_path = temp_ca.name
 
         try:
             # Even with SSL_VERIFY=false, custom CA cert should be used
-            with patch.dict("os.environ", {
-                "OPENSHIFT_SSL_VERIFY": "false",
-                "OPENSHIFT_CA_CERT_PATH": temp_ca_path
-            }):
+            with patch.dict(
+                "os.environ",
+                {
+                    "OPENSHIFT_SSL_VERIFY": "false",
+                    "OPENSHIFT_CA_CERT_PATH": temp_ca_path,
+                },
+            ):
                 client = OpenShiftClient(self.api_url)
                 ssl_config = client._get_ssl_verify_config()
-                
+
                 # Should return the CA cert path, not False
                 assert ssl_config == temp_ca_path
         finally:
@@ -330,7 +357,9 @@ class TestBearerTokenAuthScenarios:
         # Test network timeout
         with patch("httpx.AsyncClient") as mock_client:
             mock_async_client = mock_client.return_value.__aenter__.return_value
-            mock_async_client.get = AsyncMock(side_effect=httpx.TimeoutException("Timeout"))
+            mock_async_client.get = AsyncMock(
+                side_effect=httpx.TimeoutException("Timeout")
+            )
 
             request = Mock()
             request.headers = {"Authorization": "Bearer timeout-token"}
@@ -368,7 +397,9 @@ class TestBearerTokenAuthScenarios:
     async def test_bearer_token_service_account_token_scenarios(self) -> None:
         """Test service account token handling in different scenarios."""
         # Test with environment variable
-        with patch.dict("os.environ", {"OPENSHIFT_SERVICE_ACCOUNT_TOKEN": "env-sa-token"}):
+        with patch.dict(
+            "os.environ", {"OPENSHIFT_SERVICE_ACCOUNT_TOKEN": "env-sa-token"}
+        ):
             client = OpenShiftClient(self.api_url)
             token = client._get_service_account_token()
             assert token == "env-sa-token"
@@ -388,7 +419,9 @@ class TestBearerTokenAuthScenarios:
                 assert token == ""
 
         # Test that env var takes priority over file
-        with patch.dict("os.environ", {"OPENSHIFT_SERVICE_ACCOUNT_TOKEN": "env-priority"}):
+        with patch.dict(
+            "os.environ", {"OPENSHIFT_SERVICE_ACCOUNT_TOKEN": "env-priority"}
+        ):
             with patch("builtins.open", mock_open(read_data="file-content")):
                 client = OpenShiftClient(self.api_url)
                 token = client._get_service_account_token()
@@ -438,14 +471,17 @@ class TestAuthenticationIntegration:
         external_backend = BearerTokenBackend(external_client)
 
         # Internal API scenario (pod with mounted CA)
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.crt', delete=False) as temp_ca:
-            temp_ca.write("-----BEGIN CERTIFICATE-----\ninternal CA\n-----END CERTIFICATE-----")
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".crt", delete=False
+        ) as temp_ca:
+            temp_ca.write(
+                "-----BEGIN CERTIFICATE-----\ninternal CA\n-----END CERTIFICATE-----"
+            )
             temp_ca_path = temp_ca.name
 
         try:
             internal_client = OpenShiftClient(
-                "https://kubernetes.default.svc:443",
-                ca_cert_path=temp_ca_path
+                "https://kubernetes.default.svc:443", ca_cert_path=temp_ca_path
             )
             internal_backend = BearerTokenBackend(internal_client)
 
@@ -475,12 +511,12 @@ class TestAuthenticationIntegration:
                 # Verify different SSL configurations were used
                 assert mock_client.call_count == 2
                 calls = mock_client.call_args_list
-                
+
                 # First call (external) should use system CA (verify=True)
                 assert calls[0][1]["verify"] is True
-                
+
                 # Second call (internal) should use custom CA
                 assert calls[1][1]["verify"] == temp_ca_path
 
         finally:
-            os.unlink(temp_ca_path) 
+            os.unlink(temp_ca_path)

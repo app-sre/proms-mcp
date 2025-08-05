@@ -575,11 +575,6 @@ async def find_metrics_by_pattern(datasource_id: str, pattern: str) -> str:
         )
 
 
-
-
-
-
-
 # MCP Tools Implementation
 
 

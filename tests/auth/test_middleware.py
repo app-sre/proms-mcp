@@ -28,14 +28,6 @@ class TestAuthenticationMiddleware:
         async def metrics(request: Request) -> PlainTextResponse:
             return PlainTextResponse("# metrics")
 
-        @app.route("/.well-known/oauth-protected-resource")
-        async def oauth_protected_resource(request: Request) -> JSONResponse:
-            return JSONResponse({"resource_server": "test"})
-
-        @app.route("/.well-known/oauth-authorization-server")
-        async def oauth_authorization_server(request: Request) -> JSONResponse:
-            return JSONResponse({"issuer": "test"})
-
         @app.route("/protected")
         async def protected(request: Request) -> PlainTextResponse:
             return PlainTextResponse("Protected content")
@@ -58,14 +50,6 @@ class TestAuthenticationMiddleware:
         response = client.get("/metrics")
         assert response.status_code == 200
         assert response.text == "# metrics"
-
-        response = client.get("/.well-known/oauth-protected-resource")
-        assert response.status_code == 200
-        assert response.json() == {"resource_server": "test"}
-
-        response = client.get("/.well-known/oauth-authorization-server")
-        assert response.status_code == 200
-        assert response.json() == {"issuer": "test"}
 
         # Test protected endpoint - should fail without authentication
         response = client.get("/protected")

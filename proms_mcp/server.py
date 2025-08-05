@@ -2,14 +2,13 @@
 """Lean Proms MCP Server using FastMCP."""
 
 import asyncio
-import json
 import os
 import re
 import sys
 import time
 from collections import defaultdict
 from collections.abc import Callable
-from datetime import UTC
+from datetime import UTC, datetime
 from functools import wraps
 from typing import Any
 
@@ -240,59 +239,44 @@ def initialize_server() -> None:
     logger.info("Server initialization complete")
 
 
-def format_tool_response(
-    data: Any,
-    status: str = "success",
-    error: str | None = None,
-    datasource: str | None = None,
-    query: str | None = None,
-) -> str:
-    """Format tool response as JSON string."""
-    from datetime import datetime
-
-    response = {
-        "status": status,
-        "timestamp": datetime.now(UTC).isoformat(),
-    }
-
-    if datasource:
-        response["datasource"] = datasource
-    if query:
-        response["query"] = query
-    if status == "success":
-        response["data"] = data
-    else:
-        response["error"] = error or "Unknown error"
-
-    return json.dumps(response, indent=2)
-
-
 def tool_error_handler(func: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator to handle common tool errors and server initialization checks."""
 
     @wraps(func)
-    async def async_wrapper(*args: Any, **kwargs: Any) -> str:
+    async def async_wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
         try:
             if not config_loader:
-                return format_tool_response(None, "error", "Server not initialized")
+                return {
+                    "status": "error",
+                    "error": "Server not initialized",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
             return await func(*args, **kwargs)  # type: ignore[no-any-return]
         except Exception as e:
             logger.error(f"Error in {func.__name__}", error=str(e), **kwargs)
-            return format_tool_response(
-                None, "error", f"Failed to execute {func.__name__}: {str(e)}"
-            )
+            return {
+                "status": "error",
+                "error": f"Failed to execute {func.__name__}: {str(e)}",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
 
     @wraps(func)
-    def sync_wrapper(*args: Any, **kwargs: Any) -> str:
+    def sync_wrapper(*args: Any, **kwargs: Any) -> dict[str, Any]:
         try:
             if not config_loader:
-                return format_tool_response(None, "error", "Server not initialized")
+                return {
+                    "status": "error",
+                    "error": "Server not initialized",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
             return func(*args, **kwargs)  # type: ignore[no-any-return]
         except Exception as e:
             logger.error(f"Error in {func.__name__}", error=str(e), **kwargs)
-            return format_tool_response(
-                None, "error", f"Failed to execute {func.__name__}: {str(e)}"
-            )
+            return {
+                "status": "error",
+                "error": f"Failed to execute {func.__name__}: {str(e)}",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
 
     # Return appropriate wrapper based on whether function is async
     if asyncio.iscoroutinefunction(func):
@@ -317,53 +301,73 @@ def validate_datasource(datasource_id: str) -> tuple[Any, str | None]:
 @app.tool()
 @mcp_access_log("list_datasources")
 @tool_error_handler
-def list_datasources() -> str:
+def list_datasources() -> dict[str, Any]:
     """List all available Prometheus datasources.
 
     Returns:
-        JSON string with list of configured Prometheus datasources
+        Dict with list of configured Prometheus datasources
     """
     if not config_loader:
-        return format_tool_response(None, "error", "Server not initialized")
+        return {
+            "status": "error",
+            "error": "Server not initialized",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     datasources = [
         {"id": name, "name": name, "url": ds.url, "type": "prometheus"}
         for name, ds in config_loader.datasources.items()
     ]
-    return format_tool_response(datasources)
+    return {
+        "status": "success",
+        "data": datasources,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
 
 
 @app.tool()
 @mcp_access_log("list_metrics")
 @tool_error_handler
-async def list_metrics(datasource_id: str) -> str:
+async def list_metrics(datasource_id: str) -> dict[str, Any]:
     """Get all available metric names from a datasource.
 
     Args:
         datasource_id: ID of the Prometheus datasource
 
     Returns:
-        JSON string with list of metric names
+        Dict with list of metric names
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
-        return format_tool_response(None, "error", error)
+        return {
+            "status": "error",
+            "error": error,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     async with get_prometheus_client(datasource) as client:
         result = await client.get_metric_names()
 
     if result["status"] == "success":
         metrics = result["data"].get("data", [])
-        return format_tool_response(metrics, datasource=datasource_id)
+        return {
+            "status": "success",
+            "data": metrics,
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     else:
-        return format_tool_response(
-            None, "error", result["error"], datasource=datasource_id
-        )
+        return {
+            "status": "error",
+            "error": result["error"],
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 @app.tool()
 @mcp_access_log("get_metric_metadata")
 @tool_error_handler
-async def get_metric_metadata(datasource_id: str, metric_name: str) -> str:
+async def get_metric_metadata(datasource_id: str, metric_name: str) -> dict[str, Any]:
     """Get metadata for a specific metric.
 
     Args:
@@ -371,21 +375,33 @@ async def get_metric_metadata(datasource_id: str, metric_name: str) -> str:
         metric_name: Name of the metric to get metadata for
 
     Returns:
-        JSON string with metric metadata
+        Dict with metric metadata
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
-        return format_tool_response(None, "error", error)
+        return {
+            "status": "error",
+            "error": error,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     async with get_prometheus_client(datasource) as client:
         result = await client.get_metric_metadata(metric_name)
 
     if result["status"] == "success":
-        return format_tool_response(result["data"], datasource=datasource_id)
+        return {
+            "status": "success",
+            "data": result["data"],
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     else:
-        return format_tool_response(
-            None, "error", result["error"], datasource=datasource_id
-        )
+        return {
+            "status": "error",
+            "error": result["error"],
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 # Query Tools
@@ -396,7 +412,7 @@ async def get_metric_metadata(datasource_id: str, metric_name: str) -> str:
 @tool_error_handler
 async def query_instant(
     datasource_id: str, promql: str, time: str | None = None
-) -> str:
+) -> dict[str, Any]:
     """Execute instant PromQL query.
 
     Args:
@@ -405,7 +421,7 @@ async def query_instant(
         time: Optional timestamp (RFC3339 or Unix timestamp)
 
     Returns:
-        JSON string with query results
+        Dict with query results
 
     Note:
         When using the time parameter, check your local system's current date/time
@@ -413,19 +429,31 @@ async def query_instant(
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
-        return format_tool_response(None, "error", error)
+        return {
+            "status": "error",
+            "error": error,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     async with get_prometheus_client(datasource) as client:
         result = await client.query_instant(promql, time)
 
     if result["status"] == "success":
-        return format_tool_response(
-            result["data"], datasource=datasource_id, query=promql
-        )
+        return {
+            "status": "success",
+            "data": result["data"],
+            "datasource": datasource_id,
+            "query": promql,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     else:
-        return format_tool_response(
-            None, "error", result["error"], datasource=datasource_id, query=promql
-        )
+        return {
+            "status": "error",
+            "error": result["error"],
+            "datasource": datasource_id,
+            "query": promql,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 @app.tool()
@@ -433,7 +461,7 @@ async def query_instant(
 @tool_error_handler
 async def query_range(
     datasource_id: str, promql: str, start: str, end: str, step: str
-) -> str:
+) -> dict[str, Any]:
     """Execute range PromQL query.
 
     Args:
@@ -444,7 +472,7 @@ async def query_range(
         step: Step duration (e.g., "30s", "1m", "5m")
 
     Returns:
-        JSON string with query results
+        Dict with query results
 
     Note:
         Always check your local system's current date/time when constructing
@@ -452,19 +480,31 @@ async def query_range(
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
-        return format_tool_response(None, "error", error)
+        return {
+            "status": "error",
+            "error": error,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     async with get_prometheus_client(datasource) as client:
         result = await client.query_range(promql, start, end, step)
 
     if result["status"] == "success":
-        return format_tool_response(
-            result["data"], datasource=datasource_id, query=promql
-        )
+        return {
+            "status": "success",
+            "data": result["data"],
+            "datasource": datasource_id,
+            "query": promql,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     else:
-        return format_tool_response(
-            None, "error", result["error"], datasource=datasource_id, query=promql
-        )
+        return {
+            "status": "error",
+            "error": result["error"],
+            "datasource": datasource_id,
+            "query": promql,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 # Analysis Helper Tools
@@ -473,7 +513,7 @@ async def query_range(
 @app.tool()
 @mcp_access_log("get_metric_labels")
 @tool_error_handler
-async def get_metric_labels(datasource_id: str, metric_name: str) -> str:
+async def get_metric_labels(datasource_id: str, metric_name: str) -> dict[str, Any]:
     """Get all label names for a specific metric.
 
     Args:
@@ -481,11 +521,15 @@ async def get_metric_labels(datasource_id: str, metric_name: str) -> str:
         metric_name: Name of the metric
 
     Returns:
-        JSON string with list of label names
+        Dict with list of label names
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
-        return format_tool_response(None, "error", error)
+        return {
+            "status": "error",
+            "error": error,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     async with get_prometheus_client(datasource) as client:
         result = await client.get_series(f"{metric_name}")
@@ -498,11 +542,19 @@ async def get_metric_labels(datasource_id: str, metric_name: str) -> str:
         # Remove __name__ as it's the metric name itself
         label_names.discard("__name__")
 
-        return format_tool_response(sorted(list(label_names)), datasource=datasource_id)
+        return {
+            "status": "success",
+            "data": sorted(list(label_names)),
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     else:
-        return format_tool_response(
-            None, "error", result["error"], datasource=datasource_id
-        )
+        return {
+            "status": "error",
+            "error": result["error"],
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 @app.tool()
@@ -510,7 +562,7 @@ async def get_metric_labels(datasource_id: str, metric_name: str) -> str:
 @tool_error_handler
 async def get_label_values(
     datasource_id: str, label_name: str, metric_name: str | None = None
-) -> str:
+) -> dict[str, Any]:
     """Get all values for a specific label.
 
     Args:
@@ -519,28 +571,40 @@ async def get_label_values(
         metric_name: Optional metric name to filter by
 
     Returns:
-        JSON string with list of label values
+        Dict with list of label values
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
-        return format_tool_response(None, "error", error)
+        return {
+            "status": "error",
+            "error": error,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     async with get_prometheus_client(datasource) as client:
         result = await client.get_label_values(label_name)
 
     if result["status"] == "success":
         values = result["data"].get("data", [])
-        return format_tool_response(values, datasource=datasource_id)
+        return {
+            "status": "success",
+            "data": values,
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     else:
-        return format_tool_response(
-            None, "error", result["error"], datasource=datasource_id
-        )
+        return {
+            "status": "error",
+            "error": result["error"],
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 @app.tool()
 @mcp_access_log("find_metrics_by_pattern")
 @tool_error_handler
-async def find_metrics_by_pattern(datasource_id: str, pattern: str) -> str:
+async def find_metrics_by_pattern(datasource_id: str, pattern: str) -> dict[str, Any]:
     """Find metrics matching a regex pattern.
 
     Args:
@@ -548,31 +612,46 @@ async def find_metrics_by_pattern(datasource_id: str, pattern: str) -> str:
         pattern: Regex pattern to match against metric names
 
     Returns:
-        JSON string with list of matching metric names
+        Dict with list of matching metric names
     """
     datasource, error = validate_datasource(datasource_id)
     if error:
-        return format_tool_response(None, "error", error)
+        return {
+            "status": "error",
+            "error": error,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     # Get all metrics first
     async with get_prometheus_client(datasource) as client:
         result = await client.get_metric_names()
 
     if result["status"] != "success":
-        return format_tool_response(
-            None, "error", result["error"], datasource=datasource_id
-        )
+        return {
+            "status": "error",
+            "error": result["error"],
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
     # Filter by pattern
     all_metrics = result["data"].get("data", [])
     try:
         regex = re.compile(pattern)
         matching_metrics = [metric for metric in all_metrics if regex.search(metric)]
-        return format_tool_response(matching_metrics, datasource=datasource_id)
+        return {
+            "status": "success",
+            "data": matching_metrics,
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
     except re.error as e:
-        return format_tool_response(
-            None, "error", f"Invalid regex pattern: {str(e)}", datasource=datasource_id
-        )
+        return {
+            "status": "error",
+            "error": f"Invalid regex pattern: {str(e)}",
+            "datasource": datasource_id,
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
 
 
 # MCP Tools Implementation

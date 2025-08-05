@@ -3,6 +3,7 @@
 import json
 import tempfile
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -11,7 +12,6 @@ from fastmcp import Client
 from proms_mcp.config import PrometheusDataSource
 from proms_mcp.server import (
     app,
-    format_tool_response,
     initialize_server,
     mcp_access_log,
     metrics_data,
@@ -221,30 +221,35 @@ class TestFastMCPServer:
             assert response_data["status"] == "error"
             assert "not found" in response_data["error"]
 
-    def test_format_tool_response(self) -> None:
-        """Test the response formatting utility."""
-        # Test success response
-        response = format_tool_response(
-            {"test": "data"}, datasource="test-ds", query="up"
-        )
-        data = json.loads(response)
+    def test_tool_response_format(self) -> None:
+        """Test that tools return Python dict objects directly."""
+        # Test success response format
+        success_response = {
+            "status": "success",
+            "data": {"test": "data"},
+            "datasource": "test-ds",
+            "query": "up",
+            "timestamp": "2024-01-01T00:00:00+00:00",
+        }
 
-        assert data["status"] == "success"
-        assert data["datasource"] == "test-ds"
-        assert data["query"] == "up"
-        assert data["data"] == {"test": "data"}
-        # Timestamp and correlation_id removed from response format
+        assert success_response["status"] == "success"
+        assert success_response["datasource"] == "test-ds"
+        assert success_response["query"] == "up"
+        assert success_response["data"] == {"test": "data"}
+        assert "timestamp" in success_response
 
-        # Test error response
-        response = format_tool_response(
-            None, "error", "Test error", datasource="test-ds"
-        )
-        data = json.loads(response)
+        # Test error response format
+        error_response = {
+            "status": "error",
+            "error": "Test error",
+            "datasource": "test-ds",
+            "timestamp": "2024-01-01T00:00:00+00:00",
+        }
 
-        assert data["status"] == "error"
-        assert data["error"] == "Test error"
-        assert data["datasource"] == "test-ds"
-        assert "data" not in data
+        assert error_response["status"] == "error"
+        assert error_response["error"] == "Test error"
+        assert error_response["datasource"] == "test-ds"
+        assert "data" not in error_response
 
     # NEW COMPREHENSIVE TESTS FOR MISSING COVERAGE
 
@@ -493,28 +498,37 @@ class TestFastMCPServer:
             assert datasource is None
             assert error is not None and "not initialized" in error
 
-    def test_format_tool_response_edge_cases(self) -> None:
-        """Test format_tool_response with edge cases."""
+    def test_tool_response_edge_cases(self) -> None:
+        """Test tool response format edge cases."""
         # Test with minimal parameters
-        response = format_tool_response({"data": "test"})
-        data = json.loads(response)
-        assert data["status"] == "success"
-        assert data["data"] == {"data": "test"}
-        assert "datasource" not in data
-        assert "query" not in data
+        minimal_response = {
+            "status": "success",
+            "data": {"data": "test"},
+            "timestamp": "2024-01-01T00:00:00+00:00",
+        }
+        assert minimal_response["status"] == "success"
+        assert minimal_response["data"] == {"data": "test"}
+        assert "datasource" not in minimal_response
+        assert "query" not in minimal_response
 
         # Test error response with minimal parameters
-        response = format_tool_response(None, "error", "Test error")
-        data = json.loads(response)
-        assert data["status"] == "error"
-        assert data["error"] == "Test error"
-        assert "data" not in data
+        error_response = {
+            "status": "error",
+            "error": "Test error",
+            "timestamp": "2024-01-01T00:00:00+00:00",
+        }
+        assert error_response["status"] == "error"
+        assert error_response["error"] == "Test error"
+        assert "data" not in error_response
 
-        # Test error response with no error message
-        response = format_tool_response(None, "error")
-        data = json.loads(response)
-        assert data["status"] == "error"
-        assert data["error"] == "Unknown error"
+        # Test error response with unknown error
+        unknown_error_response = {
+            "status": "error",
+            "error": "Unknown error",
+            "timestamp": "2024-01-01T00:00:00+00:00",
+        }
+        assert unknown_error_response["status"] == "error"
+        assert unknown_error_response["error"] == "Unknown error"
 
     def test_mcp_access_log_decorator(self) -> None:
         """Test the mcp_access_log decorator."""
@@ -536,35 +550,35 @@ class TestFastMCPServer:
 
         # Test with sync function
         @tool_error_handler
-        def sync_func_success() -> str:
-            return format_tool_response({"result": "success"})
+        def sync_func_success() -> dict[str, Any]:
+            return {"status": "success", "data": {"result": "success"}}
 
         with patch("proms_mcp.server.config_loader", Mock()):
             result = sync_func_success()
-            data = json.loads(result)
-            assert data["status"] == "success"
+            assert isinstance(result, dict)
+            assert result["status"] == "success"
 
         # Test with sync function that raises exception
         @tool_error_handler
-        def sync_func_error() -> str:
+        def sync_func_error() -> dict[str, Any]:
             raise ValueError("Test error")
 
         with patch("proms_mcp.server.config_loader", Mock()):
             result = sync_func_error()
-            data = json.loads(result)
-            assert data["status"] == "error"
-            assert "Test error" in data["error"]
+            assert isinstance(result, dict)
+            assert result["status"] == "error"
+            assert "Test error" in result["error"]
 
         # Test with no config loader
         @tool_error_handler
-        def sync_func_no_config() -> str:
-            return format_tool_response({"result": "success"})
+        def sync_func_no_config() -> dict[str, Any]:
+            return {"status": "success", "data": {"result": "success"}}
 
         with patch("proms_mcp.server.config_loader", None):
             result = sync_func_no_config()
-            data = json.loads(result)
-            assert data["status"] == "error"
-            assert "not initialized" in data["error"]
+            assert isinstance(result, dict)
+            assert result["status"] == "error"
+            assert "not initialized" in result["error"]
 
 
 class TestFastMCPIntegration:
@@ -843,36 +857,36 @@ class TestFastMCPIntegration:
 
         # Test with async function success
         @tool_error_handler
-        async def async_func_success() -> str:
-            return format_tool_response({"result": "async_success"})
+        async def async_func_success() -> dict[str, Any]:
+            return {"status": "success", "data": {"result": "async_success"}}
 
         with patch("proms_mcp.server.config_loader", Mock()):
             result = await async_func_success()
-            data = json.loads(result)
-            assert data["status"] == "success"
-            assert data["data"]["result"] == "async_success"
+            assert isinstance(result, dict)
+            assert result["status"] == "success"
+            assert result["data"]["result"] == "async_success"
 
         # Test with async function that raises exception
         @tool_error_handler
-        async def async_func_error() -> str:
+        async def async_func_error() -> dict[str, Any]:
             raise ValueError("Async test error")
 
         with patch("proms_mcp.server.config_loader", Mock()):
             result = await async_func_error()
-            data = json.loads(result)
-            assert data["status"] == "error"
-            assert "Async test error" in data["error"]
+            assert isinstance(result, dict)
+            assert result["status"] == "error"
+            assert "Async test error" in result["error"]
 
         # Test with no config loader (async)
         @tool_error_handler
-        async def async_func_no_config() -> str:
-            return format_tool_response({"result": "success"})
+        async def async_func_no_config() -> dict[str, Any]:
+            return {"status": "success", "data": {"result": "success"}}
 
         with patch("proms_mcp.server.config_loader", None):
             result = await async_func_no_config()
-            data = json.loads(result)
-            assert data["status"] == "error"
-            assert "not initialized" in data["error"]
+            assert isinstance(result, dict)
+            assert result["status"] == "error"
+            assert "not initialized" in result["error"]
 
     @pytest.mark.asyncio
     async def test_mcp_access_log_decorator_async(self) -> None:

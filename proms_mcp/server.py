@@ -20,7 +20,7 @@ from .auth import AuthMode
 from .auth.backends import NoAuthBackend
 from .auth.openshift import BearerTokenBackend, OpenShiftClient
 from .client import get_prometheus_client
-from .config import get_auth_mode, get_config_loader
+from .config import ConfigLoader, get_auth_mode, get_config_loader
 from .logging import configure_logging, get_uvicorn_log_config
 from .monitoring import start_health_metrics_server
 
@@ -42,7 +42,7 @@ app = FastMCP(
 server_ready = True
 
 # Global config loader
-config_loader = None
+config_loader: ConfigLoader | None = None
 
 # Global auth backend
 auth_backend: Any = None

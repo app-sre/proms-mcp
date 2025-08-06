@@ -78,6 +78,8 @@ class TestTokenReviewVerifier:
 
             mock_response = Mock()
             mock_response.status_code = 200
+            mock_response.content = b'{"status": "success"}'  # Mock content for logging
+            mock_response.headers = {"content-type": "application/json"}
             mock_response.json.return_value = mock_successful_tokenreview_response
             mock_client.post.return_value = mock_response
 
@@ -87,7 +89,9 @@ class TestTokenReviewVerifier:
             assert isinstance(access_token, AccessToken)
             assert access_token.token == token
             assert access_token.client_id == "testuser"
-            assert access_token.scopes == ["read:data"]  # Only read access for proms-mcp
+            assert access_token.scopes == [
+                "read:data"
+            ]  # Only read access for proms-mcp
             assert access_token.resource == "proms-mcp-server"
             assert access_token.expires_at is not None
             assert access_token.expires_at > int(time.time())
@@ -204,10 +208,12 @@ class TestTokenReviewVerifier:
 
             mock_response = Mock()
             mock_response.status_code = 200
+            mock_response.content = b'{"status": "success"}'  # Mock content for logging
+            mock_response.headers = {"content-type": "application/json"}
             mock_response.json.return_value = mock_successful_tokenreview_response
             mock_client.post.return_value = mock_response
 
-            user = await verifier._validate_token_identity(token)
+            user = await verifier._validate_token_identity(token, "test-correlation-id")
 
             assert user is not None
             assert isinstance(user, User)
@@ -238,10 +244,12 @@ class TestTokenReviewVerifier:
 
             mock_response = Mock()
             mock_response.status_code = 200
+            mock_response.content = b'{"status": {"authenticated": true}}'
+            mock_response.headers = {"content-type": "application/json"}
             mock_response.json.return_value = response_without_user
             mock_client.post.return_value = mock_response
 
-            user = await verifier._validate_token_identity(token)
+            user = await verifier._validate_token_identity(token, "test-correlation-id")
 
             assert user is not None
             assert user.username == ""
@@ -274,10 +282,12 @@ class TestTokenReviewVerifier:
 
             mock_response = Mock()
             mock_response.status_code = 200
+            mock_response.content = b'{"status": {"authenticated": true, "user": {"username": "testuser"}}}'
+            mock_response.headers = {"content-type": "application/json"}
             mock_response.json.return_value = response_partial_user
             mock_client.post.return_value = mock_response
 
-            user = await verifier._validate_token_identity(token)
+            user = await verifier._validate_token_identity(token, "test-correlation-id")
 
             assert user is not None
             assert user.username == "testuser"
@@ -301,7 +311,7 @@ class TestTokenReviewVerifier:
             mock_response.json.return_value = {"status": {"authenticated": False}}
             mock_client.post.return_value = mock_response
 
-            await verifier._validate_token_identity(token)
+            await verifier._validate_token_identity(token, "test-correlation-id")
 
             # Verify client was created with correct timeout and verify settings
             mock_client_class.assert_called_once_with(timeout=10.0, verify=False)

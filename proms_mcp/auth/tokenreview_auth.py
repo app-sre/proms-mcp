@@ -74,14 +74,44 @@ class TokenReviewVerifier(TokenVerifier):
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """Verify token using Kubernetes TokenReview API."""
+        start_time = time.time()
+        token_prefix = token[:8] + "..." if len(token) > 8 else "short-token"
+        correlation_id = f"auth-{int(time.time() * 1000)}-{id(token) % 10000}"
+
+        logger.info(
+            "Token verification started",
+            correlation_id=correlation_id,
+            token_prefix=token_prefix,
+            token_length=len(token),
+            api_url=self.api_url,
+            ca_cert_configured=bool(self.ca_cert_path),
+            tls_verification=bool(self.ca_cert_path),
+        )
+
         try:
             # Validate token and get user identity
-            user = await self._validate_token_identity(token)
+            user = await self._validate_token_identity(token, correlation_id)
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+
             if not user:
-                logger.debug("Token validation failed")
+                logger.warning(
+                    "Token validation failed",
+                    correlation_id=correlation_id,
+                    token_prefix=token_prefix,
+                    duration_ms=duration_ms,
+                    reason="authentication_rejected",
+                )
                 return None
 
-            logger.info("Token validated successfully", username=user.username)
+            logger.info(
+                "Token validation successful",
+                correlation_id=correlation_id,
+                username=user.username,
+                uid=user.uid[:8] + "..." if len(user.uid) > 8 else user.uid,
+                groups_count=len(user.groups),
+                auth_method=user.auth_method,
+                duration_ms=duration_ms,
+            )
 
             # All authenticated users get read-only access (proms-mcp is read-only)
             return AccessToken(
@@ -93,10 +123,20 @@ class TokenReviewVerifier(TokenVerifier):
             )
 
         except Exception as e:
-            logger.error("Token verification failed", error=str(e))
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+            logger.error(
+                "Token verification failed",
+                correlation_id=correlation_id,
+                token_prefix=token_prefix,
+                duration_ms=duration_ms,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
             return None
 
-    async def _validate_token_identity(self, token: str) -> "User | None":
+    async def _validate_token_identity(
+        self, token: str, correlation_id: str
+    ) -> "User | None":
         """Validate token using TokenReview API with self-validation.
 
         The token being validated is also used to authenticate the TokenReview
@@ -117,40 +157,121 @@ class TokenReviewVerifier(TokenVerifier):
             # Disable TLS verification if no CA certificate available
             verify = False
 
+        tokenreview_url = f"{self.api_url}/apis/authentication.k8s.io/v1/tokenreviews"
+
+        logger.info(
+            "TokenReview API request initiated",
+            correlation_id=correlation_id,
+            url=tokenreview_url,
+            payload_size=len(str(payload)),
+            timeout_seconds=10.0,
+            tls_verify=verify if isinstance(verify, bool) else "custom_ca",
+        )
+
         async with httpx.AsyncClient(timeout=10.0, verify=verify) as client:
+            request_start = time.time()
             try:
                 response = await client.post(
-                    f"{self.api_url}/apis/authentication.k8s.io/v1/tokenreviews",
+                    tokenreview_url,
                     json=payload,
                     headers={"Authorization": f"Bearer {token}"},  # Self-validation
                 )
 
+                request_duration_ms = round((time.time() - request_start) * 1000, 2)
+
+                logger.info(
+                    "TokenReview API response received",
+                    correlation_id=correlation_id,
+                    status_code=response.status_code,
+                    response_size=len(response.content),
+                    duration_ms=request_duration_ms,
+                    content_type=response.headers.get("content-type", "unknown"),
+                )
+
                 if response.status_code != 200:
-                    logger.debug(
-                        "TokenReview request failed",
+                    logger.warning(
+                        "TokenReview API request failed",
+                        correlation_id=correlation_id,
                         status_code=response.status_code,
-                        response=response.text[:200],
+                        response_preview=response.text[:200],
+                        duration_ms=request_duration_ms,
                     )
                     return None
 
                 result = response.json()
                 status = result.get("status", {})
+                authenticated = status.get("authenticated", False)
 
-                if not status.get("authenticated", False):
-                    logger.debug("Token not authenticated by TokenReview")
+                logger.info(
+                    "TokenReview API response parsed",
+                    correlation_id=correlation_id,
+                    authenticated=authenticated,
+                    has_user_info=bool(status.get("user")),
+                    has_error=bool(status.get("error")),
+                )
+
+                if not authenticated:
+                    error_info = status.get("error", {})
+                    logger.warning(
+                        "Token not authenticated by TokenReview",
+                        correlation_id=correlation_id,
+                        error_code=error_info.get("code"),
+                        error_message=error_info.get("message", "No error details"),
+                    )
                     return None
 
                 user_info = status.get("user", {})
+                username = user_info.get("username", "")
+                uid = user_info.get("uid", "")
+                groups = user_info.get("groups", [])
+
+                logger.info(
+                    "User identity extracted from TokenReview",
+                    correlation_id=correlation_id,
+                    username=username,
+                    uid_prefix=uid[:8] + "..." if len(uid) > 8 else uid,
+                    groups_count=len(groups),
+                    groups_preview=groups[:3]
+                    if groups
+                    else [],  # First 3 groups for visibility
+                )
+
                 return User(
-                    username=user_info.get("username", ""),
-                    uid=user_info.get("uid", ""),
-                    groups=user_info.get("groups", []),
+                    username=username,
+                    uid=uid,
+                    groups=groups,
                     auth_method="tokenreview",
                 )
 
             except httpx.TimeoutException:
-                logger.error("TokenReview request timed out")
+                request_duration_ms = round((time.time() - request_start) * 1000, 2)
+                logger.error(
+                    "TokenReview API request timed out",
+                    correlation_id=correlation_id,
+                    timeout_seconds=10.0,
+                    duration_ms=request_duration_ms,
+                    url=tokenreview_url,
+                )
+                return None
+            except httpx.HTTPStatusError as e:
+                request_duration_ms = round((time.time() - request_start) * 1000, 2)
+                logger.error(
+                    "TokenReview API HTTP error",
+                    correlation_id=correlation_id,
+                    status_code=e.response.status_code,
+                    error_detail=str(e),
+                    duration_ms=request_duration_ms,
+                    url=tokenreview_url,
+                )
                 return None
             except Exception as e:
-                logger.error("TokenReview request failed", error=str(e))
+                request_duration_ms = round((time.time() - request_start) * 1000, 2)
+                logger.error(
+                    "TokenReview API request failed",
+                    correlation_id=correlation_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                    duration_ms=request_duration_ms,
+                    url=tokenreview_url,
+                )
                 return None

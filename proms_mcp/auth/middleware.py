@@ -20,12 +20,10 @@ class AuthenticationMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Any, call_next: Any) -> Any:
         """Process request with authentication."""
-        # Skip authentication for health checks, metrics, and OAuth discovery endpoints
+        # Skip authentication for health checks, metrics
         unprotected_paths = [
             "/health",
             "/metrics",
-            "/.well-known/oauth-protected-resource",
-            "/.well-known/oauth-authorization-server",
         ]
         if request.url.path in unprotected_paths:
             return await call_next(request)

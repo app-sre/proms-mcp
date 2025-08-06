@@ -995,7 +995,7 @@ class TestUnprotectedEndpoints:
         from proms_mcp.auth.middleware import AuthenticationMiddleware
 
         # Create a test client for the FastMCP app
-        asgi_app = app.streamable_http_app()
+        asgi_app = app.http_app(path="/mcp", transport="streamable-http")
 
         # Mock auth backend that always fails authentication
         mock_auth_backend = Mock()

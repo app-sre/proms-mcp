@@ -2,8 +2,8 @@
 
 import time
 
+from proms_mcp.auth import User
 from proms_mcp.auth.cache import TokenCache
-from proms_mcp.auth.models import User
 
 
 def test_token_cache_initialization() -> None:

@@ -1,6 +1,6 @@
 """Unit tests for authentication models."""
 
-from proms_mcp.auth.models import User
+from proms_mcp.auth import User
 
 
 def test_user_creation() -> None:

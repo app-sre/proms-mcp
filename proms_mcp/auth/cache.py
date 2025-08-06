@@ -5,7 +5,7 @@ import time
 
 import structlog
 
-from .models import User
+from . import User
 
 logger = structlog.get_logger()
 

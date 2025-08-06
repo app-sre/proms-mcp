@@ -339,10 +339,10 @@ make test            # Run tests with coverage
 proms-mcp/
   proms_mcp/             # Main package
     auth/                  # Authentication module
-      __init__.py            # AuthMode enum, User model
-      backends.py            # NoAuthBackend implementation
-      middleware.py          # Authentication middleware
-      models.py              # User and AuthBackend protocol
+      __init__.py            # AuthMode enum, User model, exports
+      cache.py               # Token caching for performance
+      fastmcp_auth.py        # FastMCP OpenShiftTokenVerifier integration
+      openshift.py           # OpenShift API client
     server.py              # FastMCP server
     client.py              # Prometheus API wrapper
     config.py              # Config parser with auth support

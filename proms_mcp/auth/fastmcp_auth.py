@@ -7,7 +7,7 @@ import structlog
 from fastmcp.server.auth import TokenVerifier
 from mcp.server.auth.provider import AccessToken
 
-from .models import User
+from . import User
 
 if TYPE_CHECKING:
     from .openshift import OpenShiftClient

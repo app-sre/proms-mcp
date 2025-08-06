@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, Mock, mock_open, patch
 import httpx
 import pytest
 
-from proms_mcp.auth.models import User
-from proms_mcp.auth.openshift import BearerTokenBackend, OpenShiftClient
+from proms_mcp.auth import User
+from proms_mcp.auth.openshift import OpenShiftClient
 
 
 class TestOpenShiftClient:
@@ -178,108 +178,3 @@ class TestOpenShiftClient:
                 assert ssl_config == temp_ca_path
         finally:
             os.unlink(temp_ca_path)
-
-
-class TestBearerTokenBackend:
-    """Test BearerTokenBackend functionality."""
-
-    def test_initialization(self) -> None:
-        """Test BearerTokenBackend initialization."""
-        openshift_client = Mock()
-        backend = BearerTokenBackend(openshift_client)
-        assert backend.openshift_client == openshift_client
-
-    @pytest.mark.asyncio
-    async def test_authenticate_success(self) -> None:
-        """Test successful authentication."""
-        openshift_client = Mock()
-        user = User(username="test", uid="123", groups=["admin"], auth_method="active")
-        openshift_client.validate_token = AsyncMock(return_value=user)
-
-        backend = BearerTokenBackend(openshift_client)
-
-        # Mock request with Authorization header
-        request = Mock()
-        request.headers = {"Authorization": "Bearer valid-token"}
-
-        result = await backend.authenticate(request)
-        assert result is not None
-        assert result.username == "test"
-        openshift_client.validate_token.assert_called_once_with("valid-token")
-
-    @pytest.mark.asyncio
-    async def test_authenticate_no_auth_header(self) -> None:
-        """Test authentication with no Authorization header."""
-        openshift_client = Mock()
-        backend = BearerTokenBackend(openshift_client)
-
-        request = Mock()
-        request.headers = {}
-
-        result = await backend.authenticate(request)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_authenticate_no_bearer_prefix(self) -> None:
-        """Test authentication with non-Bearer authorization."""
-        openshift_client = Mock()
-        backend = BearerTokenBackend(openshift_client)
-
-        request = Mock()
-        request.headers = {"Authorization": "Basic dXNlcjpwYXNz"}
-
-        result = await backend.authenticate(request)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_authenticate_malformed_header(self) -> None:
-        """Test authentication with malformed Authorization header."""
-        openshift_client = Mock()
-        backend = BearerTokenBackend(openshift_client)
-
-        request = Mock()
-        request.headers = {"Authorization": "Bearer"}  # No token
-
-        result = await backend.authenticate(request)
-        assert result is None
-
-    @pytest.mark.asyncio
-    async def test_authenticate_empty_token(self) -> None:
-        """Test authentication with empty token."""
-        openshift_client = AsyncMock()
-        openshift_client.validate_token = AsyncMock(return_value=None)
-        backend = BearerTokenBackend(openshift_client)
-
-        request = Mock()
-        request.headers = {"Authorization": "Bearer "}  # Empty token
-
-        result = await backend.authenticate(request)
-        assert result is None
-        # Should call validate_token with empty string
-        openshift_client.validate_token.assert_called_once_with("")
-
-    @pytest.mark.asyncio
-    async def test_authenticate_invalid_token(self) -> None:
-        """Test authentication with invalid token."""
-        openshift_client = Mock()
-        openshift_client.validate_token = AsyncMock(return_value=None)
-
-        backend = BearerTokenBackend(openshift_client)
-
-        request = Mock()
-        request.headers = {"Authorization": "Bearer invalid-token"}
-
-        result = await backend.authenticate(request)
-        assert result is None
-        openshift_client.validate_token.assert_called_once_with("invalid-token")
-
-    @pytest.mark.asyncio
-    async def test_authenticate_request_without_headers_attr(self) -> None:
-        """Test authentication with request object without headers attribute."""
-        openshift_client = Mock()
-        backend = BearerTokenBackend(openshift_client)
-
-        request = Mock(spec=[])  # Mock without headers attribute
-
-        result = await backend.authenticate(request)
-        assert result is None

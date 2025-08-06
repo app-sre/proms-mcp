@@ -1,13 +1,12 @@
 """OpenShift authentication integration."""
 
 import os
-from typing import Any
 
 import httpx
 import structlog
 
+from . import User
 from .cache import TokenCache
-from .models import User
 
 logger = structlog.get_logger()
 
@@ -170,40 +169,3 @@ class OpenShiftClient:
                 error_type=type(e).__name__,
             )
             return None
-
-
-class BearerTokenBackend:
-    """Authentication backend for OpenShift bearer tokens."""
-
-    def __init__(self, openshift_client: OpenShiftClient):
-        """Initialize bearer token backend.
-
-        Args:
-            openshift_client: OpenShift client for token validation
-        """
-        self.openshift_client = openshift_client
-
-    async def authenticate(self, request: Any) -> User | None:
-        """Authenticate request using bearer token from Authorization header.
-
-        Args:
-            request: HTTP request object
-
-        Returns:
-            User object if authentication successful, None otherwise
-        """
-        # Extract token from Authorization header
-        auth_header = getattr(request, "headers", {}).get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            logger.debug("No valid Authorization header found")
-            return None
-
-        try:
-            token = auth_header.split(" ", 1)[1]
-            logger.debug("Token found in Authorization header")
-        except IndexError:
-            logger.warning("Malformed Authorization header")
-            return None
-
-        # Validate token
-        return await self.openshift_client.validate_token(token)

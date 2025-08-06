@@ -91,13 +91,13 @@ run-auth: check-datasources
 		echo "❌ OPENSHIFT_API_URL is required for authenticated mode"; \
 		echo ""; \
 		echo "Usage:"; \
-		echo "  make run-auth OPENSHIFT_API_URL=https://api.cluster.example.com:6443"; \
-		echo "  # Optional: OPENSHIFT_SERVICE_ACCOUNT_TOKEN=your-token"; \
+		echo "     make run-auth OPENSHIFT_API_URL=https://api.cluster.example.com:6443"; \
+		echo ' or  make run-auth OPENSHIFT_API_URL=$(oc whoami --show-server)'; \
 		echo ""; \
 		exit 1; \
 	fi
 	@echo "Using OpenShift API: $(OPENSHIFT_API_URL)"
-	AUTH_MODE=active OPENSHIFT_API_URL="$(OPENSHIFT_API_URL)" OPENSHIFT_SERVICE_ACCOUNT_TOKEN="$(OPENSHIFT_SERVICE_ACCOUNT_TOKEN)" GRAFANA_DATASOURCES_PATH="$(DATASOURCES_YAML)" uv run python -m proms_mcp
+	AUTH_MODE=active OPENSHIFT_API_URL="$(OPENSHIFT_API_URL)" GRAFANA_DATASOURCES_PATH="$(DATASOURCES_YAML)" uv run python -m proms_mcp
 
 build:
 	@echo "Building container image with $(notdir $(CONTAINER_ENGINE))..."

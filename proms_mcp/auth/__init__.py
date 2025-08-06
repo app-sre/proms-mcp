@@ -18,17 +18,17 @@ class User:
     auth_method: str
 
 
-# Import OpenShiftTokenVerifier conditionally to avoid circular imports
+# Import token verifiers conditionally to avoid circular imports
 def __getattr__(name: str) -> Any:
-    if name == "OpenShiftTokenVerifier":
-        from .fastmcp_auth import OpenShiftTokenVerifier
+    if name == "TokenReviewVerifier":
+        from .tokenreview_auth import TokenReviewVerifier
 
-        return OpenShiftTokenVerifier
+        return TokenReviewVerifier
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 __all__ = [
     "AuthMode",
     "User",
-    "OpenShiftTokenVerifier",
+    "TokenReviewVerifier",
 ]

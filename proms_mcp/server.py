@@ -16,7 +16,6 @@ import structlog
 from fastmcp import FastMCP
 
 from .auth import AuthMode
-from .auth.openshift import OpenShiftClient
 from .client import get_prometheus_client
 from .config import ConfigLoader, get_auth_mode, get_config_loader
 from .logging import configure_logging
@@ -229,7 +228,7 @@ def initialize_server() -> None:
     if auth_mode == AuthMode.NONE:
         logger.info("Using no-auth mode for development")
     elif auth_mode == AuthMode.ACTIVE:
-        # Initialize OpenShift authentication
+        # Initialize TokenReview authentication
         openshift_api_url = os.getenv("OPENSHIFT_API_URL")
         if not openshift_api_url:
             logger.error("OPENSHIFT_API_URL required for active authentication mode")
@@ -237,19 +236,21 @@ def initialize_server() -> None:
                 "OPENSHIFT_API_URL environment variable is required for active authentication"
             )
 
+        # Get optional CA certificate path
         ca_cert_path = os.getenv("OPENSHIFT_CA_CERT_PATH")
-        openshift_client = OpenShiftClient(openshift_api_url, ca_cert_path=ca_cert_path)
 
-        # Create FastMCP TokenVerifier
-        from .auth import OpenShiftTokenVerifier
+        # Create TokenReview-based verifier
+        from .auth import TokenReviewVerifier
 
-        auth_provider = OpenShiftTokenVerifier(
-            openshift_client=openshift_client,
-            resource_server_url=f"http://localhost:{os.getenv('PORT', '8000')}",
+        auth_provider = TokenReviewVerifier(
+            api_url=openshift_api_url,
             required_scopes=["read:data"],
+            ca_cert_path=ca_cert_path,
         )
         logger.info(
-            "Using FastMCP OpenShift token verification", api_url=openshift_api_url
+            "Using TokenReview authentication",
+            api_url=openshift_api_url,
+            ca_cert_path=ca_cert_path or "auto-detected",
         )
 
     # Initialize FastMCP with auth

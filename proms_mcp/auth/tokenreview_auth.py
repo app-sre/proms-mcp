@@ -188,7 +188,7 @@ class TokenReviewVerifier(TokenVerifier):
                     content_type=response.headers.get("content-type", "unknown"),
                 )
 
-                if response.status_code != 200:
+                if response.status_code not in (200, 201):
                     logger.warning(
                         "TokenReview API request failed",
                         correlation_id=correlation_id,

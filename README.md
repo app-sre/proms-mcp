@@ -335,7 +335,7 @@ make test            # Run tests with coverage
 
 ### Project Structure
 
-```
+```none
 proms-mcp/
   proms_mcp/             # Main package
     auth/                  # Authentication module

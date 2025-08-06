@@ -679,7 +679,7 @@ def main() -> None:
     timeout_graceful_shutdown = int(os.getenv("SHUTDOWN_TIMEOUT_SECONDS", "8"))
 
     # Create the ASGI app from FastMCP
-    asgi_app: Any = app.streamable_http_app()
+    asgi_app: Any = app.http_app(path="/mcp", transport="streamable-http")
 
     # Wrap with authentication middleware if active auth mode
     if auth_backend and get_auth_mode() == AuthMode.ACTIVE:

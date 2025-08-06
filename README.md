@@ -19,15 +19,18 @@ This server implements the MCP protocol using the modern FastMCP library, allowi
 ## MCP Tools
 
 ### Discovery Tools
+
 - `list_datasources`: List all available Prometheus datasources
 - `list_metrics`: Get all available metric names from a datasource
 - `get_metric_metadata`: Get metadata for a specific metric
 
 ### Query Tools
+
 - `query_instant`: Execute instant PromQL query
 - `query_range`: Execute range PromQL query
 
 ### Analysis Tools
+
 - `get_metric_labels`: Get all label names for a specific metric
 - `get_label_values`: Get all values for a specific label
 - `find_metrics_by_pattern`: Find metrics matching a regex pattern
@@ -57,12 +60,14 @@ make run
 ```
 
 **Authenticated mode** (for testing with OpenShift auth):
+
 ```bash
 # Run with OpenShift authentication
 make run-auth OPENSHIFT_API_URL=https://api.cluster.example.com:6443
 ```
 
 **Manual startup** (if not using make):
+
 ```bash
 # Development mode (no authentication)
 export AUTH_MODE=none
@@ -96,6 +101,7 @@ podman run -p 8000:8000 \
 The server supports two authentication modes:
 
 **Development (No Authentication):**
+
 ```json
 {
   "mcpServers": {
@@ -108,6 +114,7 @@ The server supports two authentication modes:
 ```
 
 **Production (Bearer Token Authentication):**
+
 ```json
 {
   "mcpServers": {
@@ -125,6 +132,7 @@ The server supports two authentication modes:
 > ⚠️ **Security Note**: Never commit `.cursor/mcp.json` with real tokens to git. It's already in `.gitignore`.
 
 See `.cursor/mcp-examples.json` for complete configuration examples including:
+
 - Development and production setups
 - Service account token configuration
 - Multi-environment configurations
@@ -133,6 +141,7 @@ See `.cursor/mcp-examples.json` for complete configuration examples including:
 ### Other MCP Clients
 
 The server exposes MCP over HTTP at:
+
 - **Endpoint**: `POST http://localhost:8000/mcp` (or your deployed URL)
 - **Protocol**: JSON-RPC 2.0 over HTTP
 - **Content-Type**: `application/json`
@@ -196,6 +205,7 @@ The server requires the `system:auth-delegator` ClusterRole to validate OpenShif
 Create a Grafana datasource provisioning YAML file. Only `type: "prometheus"` datasources are processed.
 
 **Example datasources.yaml:**
+
 ```yaml
 apiVersion: 1
 prune: true
@@ -221,6 +231,7 @@ datasources:
 ### PromQL Query Validation
 
 The server implements basic security checks:
+
 - **Query Length**: Limits to 10,000 characters
 - **Empty Query**: Prevents empty or whitespace-only queries
 - **Input Sanitization**: Basic parameter encoding via httpx
@@ -260,6 +271,7 @@ oc create clusterrolebinding proms-mcp-auth-delegator \
 ```
 
 **Template Parameters:**
+
 - `AUTH_MODE`: `none` (development) or `active` (production)
 - `OPENSHIFT_API_URL`: Required for bearer token authentication mode
 - `AUTH_CACHE_TTL_SECONDS`: Token validation cache TTL (default: 300)
@@ -267,6 +279,7 @@ oc create clusterrolebinding proms-mcp-auth-delegator \
 ### MCP Client Configuration
 
 #### Development Mode (No Authentication)
+
 ```json
 {
   "mcpServers": {
@@ -278,6 +291,7 @@ oc create clusterrolebinding proms-mcp-auth-delegator \
 ```
 
 #### Production Mode (Bearer Token)
+
 ```json
 {
   "mcpServers": {
@@ -292,6 +306,7 @@ oc create clusterrolebinding proms-mcp-auth-delegator \
 ```
 
 Get your OpenShift token:
+
 ```bash
 export OPENSHIFT_TOKEN=$(oc whoami -t)
 ```
@@ -309,6 +324,7 @@ The template creates the ServiceAccount. The ClusterRoleBinding must be created 
 ## Development
 
 ### Code Quality
+
 ```bash
 make format          # Format code and fix imports
 make lint            # Lint and type check code
@@ -316,6 +332,7 @@ make test            # Run tests with coverage
 ```
 
 ### Project Structure
+
 ```
 proms-mcp/
   proms_mcp/             # Main package
@@ -338,7 +355,7 @@ proms-mcp/
 
 ### Common Issues
 
-1. **No datasources loaded**: 
+1. **No datasources loaded**:
    - Check that `GRAFANA_DATASOURCES_PATH` points to your datasources file
    - Verify YAML syntax is valid (JSON format is also supported)
    - Ensure the file contains a `datasources` array with `type: "prometheus"` entries
@@ -346,16 +363,18 @@ proms-mcp/
 2. **Authentication failures**: Verify bearer tokens in `secureJsonData`
 3. **Query timeouts**: Adjust `QUERY_TIMEOUT` environment variable
 4. **Query validation errors**: Check query length and ensure non-empty queries
-5. **Client connection issues**: 
+5. **Client connection issues**:
    - **400 Bad Request**: Server restart - client will reconnect automatically
    - **406 Not Acceptable**: Client must accept `application/json, text/event-stream`
 
 ### Debug Mode
+
 ```bash
 LOG_LEVEL=DEBUG make run
 ```
 
 ### Health Checks
+
 ```bash
 curl http://localhost:8080/health
 curl http://localhost:8080/metrics | grep mcp_
@@ -377,4 +396,4 @@ curl http://localhost:8080/metrics | grep mcp_
 
 ## License
 
-Apache License 2.0 
+Apache License 2.0

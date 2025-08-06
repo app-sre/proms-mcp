@@ -35,8 +35,6 @@
       "# Start local server with authentication enabled:",
       "export AUTH_MODE=active",
       "export OPENSHIFT_API_URL=https://api.cluster.example.com:6443",
-      "export OPENSHIFT_SSL_VERIFY=false  # For dev with self-signed certs",
-      "export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)",
       "uv run python -m proms_mcp"
     ]
   },

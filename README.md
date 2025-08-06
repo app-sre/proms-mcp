@@ -159,7 +159,6 @@ The server exposes MCP over HTTP at:
 - `LOG_LEVEL`: Logging level (default: INFO)
 - `GRAFANA_DATASOURCES_PATH`: Path to datasource config file (default: /etc/grafana/provisioning/datasources/datasources.yaml)
 - `QUERY_TIMEOUT`: Query timeout in seconds (default: 30)
-- `SHUTDOWN_TIMEOUT_SECONDS`: Graceful shutdown timeout in seconds (default: 8)
 
 ### Authentication Configuration
 
@@ -167,10 +166,7 @@ The server supports two authentication modes:
 
 - `AUTH_MODE`: Authentication mode (`none` or `active`, default: `active`)
 - `OPENSHIFT_API_URL`: OpenShift API server URL (required for bearer token auth)
-- `OPENSHIFT_SERVICE_ACCOUNT_TOKEN`: Service account token for API calls (for local development)
 - `OPENSHIFT_CA_CERT_PATH`: Path to CA certificate file for SSL verification (optional, only needed for custom certificates)
-- `OPENSHIFT_SSL_VERIFY`: Enable/disable SSL verification (`true`/`false`, default: `true`)
-- `AUTH_CACHE_TTL_SECONDS`: Authentication cache TTL in seconds (default: 300)
 
 #### No Authentication Mode (Development Only)
 
@@ -182,20 +178,17 @@ AUTH_MODE=none uv run python -m proms_mcp
 #### Bearer Token Authentication Mode (Default)
 
 ```bash
-# Get your OpenShift token
-export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
-
 # Run with bearer token authentication
 AUTH_MODE=active \
 OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
-OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$OPENSHIFT_SERVICE_ACCOUNT_TOKEN \
 uv run python -m proms_mcp
 
-# For self-signed certificates, you can:
-# 1. Disable SSL verification (INSECURE - development only):
-OPENSHIFT_SSL_VERIFY=false uv run python -m proms_mcp
+# if you're authenticated on openshift already:
+AUTH_MODE=active \
+OPENSHIFT_API_URL=$(oc whoami --show-server) \
+uv run python -m proms_mcp
 
-# 2. Or provide the CA certificate (if needed for custom certificates):
+# For self-signed certificates, you can provide the CA certificate (if needed for custom certificates):
 OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt uv run python -m proms_mcp
 ```
 
@@ -276,7 +269,6 @@ oc create clusterrolebinding proms-mcp-auth-delegator \
 
 - `AUTH_MODE`: `none` (development) or `active` (production)
 - `OPENSHIFT_API_URL`: Required for bearer token authentication mode
-- `AUTH_CACHE_TTL_SECONDS`: Token validation cache TTL (default: 300)
 
 ### MCP Client Configuration
 

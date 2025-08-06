@@ -744,26 +744,7 @@ class TestFastMCPIntegration:
                     stateless_http=True,
                 )
 
-    def test_server_main_with_custom_shutdown_timeout(self) -> None:
-        """Test server main with custom shutdown timeout."""
-        from proms_mcp.server import main
 
-        with patch("proms_mcp.server.start_health_metrics_server"):
-            with patch("proms_mcp.server.app") as mock_app:
-                mock_app.run = Mock()
-
-                with patch.dict("os.environ", {"SHUTDOWN_TIMEOUT_SECONDS": "15"}):
-                    main()
-
-                # FastMCP handles shutdown internally, so we just verify the app.run was called
-                mock_app.run.assert_called_once_with(
-                    transport="streamable-http",
-                    host="0.0.0.0",
-                    port=8000,
-                    path="/mcp/",
-                    log_level="info",
-                    stateless_http=True,
-                )
 
     @pytest.mark.asyncio
     async def test_list_datasources_with_no_config_loader(self) -> None:

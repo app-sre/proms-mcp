@@ -92,7 +92,7 @@ Extract and validate these fields from each prometheus datasource:
 - `url`: Prometheus instance URL
 - `type`: Must equal "prometheus" (filter condition)
 - `jsonData.httpHeaderName1`: Bearer token header name (typically "Authorization")
-- `secureJsonData.httpHeaderValue1`: Bearer token value (e.g., "Bearer <token>")
+- `secureJsonData.httpHeaderValue1`: Bearer token value (e.g., "Bearer MYTOKEN")
 
 ## MCP Tools Specification
 
@@ -187,7 +187,7 @@ The server uses streamable HTTP transport with enhanced shutdown handling to dea
 - **Graceful Shutdown**: Uvicorn attempts to close connections gracefully first
 - **Forced Shutdown**: After the timeout (default: 8 seconds), uvicorn forcefully closes remaining connections
 - **Container Integration**: The timeout is set to work with OpenShift's `terminationGracePeriodSeconds: 10` setting
-- **Configurable**: Use `SHUTDOWN_TIMEOUT_SECONDS` environment variable to adjust the timeout
+
 - **Native Implementation**: Uses uvicorn's built-in shutdown handling instead of custom workarounds
 
 This ensures reliable shutdown behavior even with persistent client connections (like Cursor) that may not close immediately, using uvicorn's proven shutdown mechanisms.
@@ -230,7 +230,6 @@ This ensures reliable shutdown behavior even with persistent client connections 
 - `LOG_LEVEL`: Logging level (default: INFO)
 - `GRAFANA_DATASOURCES_PATH`: Path to datasource config file (default: /etc/grafana/provisioning/datasources/datasources.yaml)
 - `QUERY_TIMEOUT`: Query timeout in seconds (default: 30)
-- `SHUTDOWN_TIMEOUT_SECONDS`: Forced shutdown timeout in seconds (default: 8)
 
 ### Resource Limits
 

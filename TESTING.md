@@ -307,7 +307,6 @@ export AUTH_MODE=active        # OpenShift bearer token auth
 # OpenShift configuration (for bearer token auth mode)
 export OPENSHIFT_API_URL=https://api.your-cluster.com:6443
 export OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt  # Optional
-export OPENSHIFT_SSL_VERIFY=true               # Optional, default true
 
 # Server configuration
 export HOST=0.0.0.0            # Default - binds to all interfaces

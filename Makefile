@@ -11,7 +11,6 @@ PORT ?= 8000
 
 # Authentication defaults for run-auth target
 OPENSHIFT_API_URL ?= 
-OPENSHIFT_SERVICE_ACCOUNT_TOKEN ?= 
 
 # Detect container engine
 CONTAINER_ENGINE := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null || echo "")
@@ -41,7 +40,6 @@ help:
 	@echo "  IMAGE_NAME                     Container image name (default: $(IMAGE_NAME))"
 	@echo "  PORT                           Server port (default: $(PORT))"
 	@echo "  OPENSHIFT_API_URL              OpenShift API URL (required for run-auth)"
-	@echo "  OPENSHIFT_SERVICE_ACCOUNT_TOKEN Service account token (optional for run-auth)"
 	@echo ""
 	@echo "Container Engine: $(notdir $(CONTAINER_ENGINE))"
 

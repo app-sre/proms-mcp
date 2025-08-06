@@ -314,7 +314,7 @@ class TestTokenReviewVerifier:
             await verifier._validate_token_identity(token, "test-correlation-id")
 
             # Verify client was created with correct timeout and verify settings
-            mock_client_class.assert_called_once_with(timeout=10.0, verify=False)
+            mock_client_class.assert_called_once_with(timeout=10.0, verify=True)
 
     def test_api_url_normalization(self) -> None:
         """Test that API URL is normalized correctly."""
@@ -344,13 +344,38 @@ class TestTokenReviewVerifier:
             assert verifier.ca_cert_path == "/custom/ca.crt"
 
     def test_ca_cert_path_explicit_not_exists(self) -> None:
-        """Test explicit CA certificate path that doesn't exist."""
+        """Test explicit CA certificate path that doesn't exist - should raise ValueError."""
         with patch("pathlib.Path.exists", return_value=False):
-            verifier = TokenReviewVerifier(
-                api_url="https://api.cluster.example.com:6443",
-                ca_cert_path="/nonexistent/ca.crt",
-            )
-            assert verifier.ca_cert_path is None
+            with pytest.raises(ValueError, match="CA certificate file not found: /nonexistent/ca.crt"):
+                TokenReviewVerifier(
+                    api_url="https://api.cluster.example.com:6443",
+                    ca_cert_path="/nonexistent/ca.crt",
+                )
+
+    @pytest.mark.asyncio
+    async def test_tls_verification_always_enabled(self) -> None:
+        """Test that TLS verification is always enabled - never disabled."""
+        verifier = TokenReviewVerifier(
+            api_url="https://api.cluster.example.com:6443",
+            ca_cert_path=None,  # No explicit CA cert
+        )
+        token = "test-token"
+
+        with patch("httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.content = b'{"status": {"authenticated": true}}'
+            mock_response.headers = {"content-type": "application/json"}
+            mock_response.json.return_value = {"status": {"authenticated": False}}
+            mock_client.post.return_value = mock_response
+
+            await verifier._validate_token_identity(token, "test-correlation-id")
+
+            # Verify TLS verification is enabled (verify=True for system CA store)
+            mock_client_class.assert_called_once_with(timeout=10.0, verify=True)
 
     def test_ca_cert_path_auto_detect_in_cluster(self) -> None:
         """Test auto-detection of in-cluster CA certificate."""

@@ -51,16 +51,19 @@ class TokenReviewVerifier(TokenVerifier):
             ca_cert_path: Explicit CA cert path or None for auto-detection
 
         Returns:
-            Path to CA certificate file or None for no verification
+            Path to CA certificate file or None (uses system CA store)
+
+        Raises:
+            ValueError: If explicit CA cert path is provided but file doesn't exist
         """
         if ca_cert_path is not None:
-            # Explicit path provided - validate it exists
+            # Explicit path provided - must exist or fail
             if Path(ca_cert_path).exists():
                 logger.info("Using explicit CA certificate", path=ca_cert_path)
                 return ca_cert_path
             else:
-                logger.warning("CA certificate path does not exist", path=ca_cert_path)
-                return None
+                logger.error("Explicit CA certificate path does not exist", path=ca_cert_path)
+                raise ValueError(f"CA certificate file not found: {ca_cert_path}")
 
         # Auto-detect in-cluster CA certificate
         in_cluster_ca = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
@@ -68,8 +71,8 @@ class TokenReviewVerifier(TokenVerifier):
             logger.info("Using in-cluster CA certificate", path=in_cluster_ca)
             return in_cluster_ca
 
-        # No CA certificate available - will skip verification
-        logger.info("No CA certificate found - TLS verification disabled")
+        # Use system CA store - never disable TLS verification
+        logger.info("Using system CA certificate store for TLS verification")
         return None
 
     async def verify_token(self, token: str) -> AccessToken | None:
@@ -85,7 +88,7 @@ class TokenReviewVerifier(TokenVerifier):
             token_length=len(token),
             api_url=self.api_url,
             ca_cert_configured=bool(self.ca_cert_path),
-            tls_verification=bool(self.ca_cert_path),
+            tls_verification="custom_ca" if self.ca_cert_path else "system_ca",
         )
 
         try:
@@ -150,12 +153,12 @@ class TokenReviewVerifier(TokenVerifier):
             "spec": {"token": token},
         }
 
-        # Configure HTTP client with optional CA certificate verification
+        # Configure HTTP client with proper CA certificate verification
+        # Always verify TLS - either with custom CA or system CA store
         if self.ca_cert_path:
-            verify: str | bool = self.ca_cert_path
+            verify: str | bool = self.ca_cert_path  # Use custom CA certificate
         else:
-            # Disable TLS verification if no CA certificate available
-            verify = False
+            verify = True  # Use system CA certificate store
 
         tokenreview_url = f"{self.api_url}/apis/authentication.k8s.io/v1/tokenreviews"
 
@@ -165,7 +168,7 @@ class TokenReviewVerifier(TokenVerifier):
             url=tokenreview_url,
             payload_size=len(str(payload)),
             timeout_seconds=10.0,
-            tls_verify=verify if isinstance(verify, bool) else "custom_ca",
+            tls_verify="custom_ca" if isinstance(verify, str) else "system_ca",
         )
 
         async with httpx.AsyncClient(timeout=10.0, verify=verify) as client:

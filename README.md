@@ -106,7 +106,7 @@ The server supports two authentication modes:
 {
   "mcpServers": {
     "proms-mcp-dev": {
-      "url": "http://localhost:8000/mcp",
+              "url": "http://localhost:8000/mcp/",
       "description": "Development server - no authentication"
     }
   }
@@ -142,11 +142,13 @@ See `.cursor/mcp-examples.json` for complete configuration examples including:
 
 The server exposes MCP over HTTP at:
 
-- **Endpoint**: `POST http://localhost:8000/mcp` (or your deployed URL)
+- **Endpoint**: `POST http://localhost:8000/mcp/` (or your deployed URL)
 - **Protocol**: JSON-RPC 2.0 over HTTP
 - **Content-Type**: `application/json`
 - **Accept**: `application/json, text/event-stream`
 - **Authentication**: Bearer token in `Authorization` header (when `AUTH_MODE=active`)
+
+> 📝 **Path Behavior**: The server uses `/mcp/` (with trailing slash) to avoid HTTP 307 redirects that can cause authentication issues in some MCP clients. Always use the trailing slash in your client configurations.
 
 ## Configuration
 
@@ -157,7 +159,6 @@ The server exposes MCP over HTTP at:
 - `LOG_LEVEL`: Logging level (default: INFO)
 - `GRAFANA_DATASOURCES_PATH`: Path to datasource config file (default: /etc/grafana/provisioning/datasources/datasources.yaml)
 - `QUERY_TIMEOUT`: Query timeout in seconds (default: 30)
-- `SHUTDOWN_TIMEOUT_SECONDS`: Graceful shutdown timeout in seconds (default: 8)
 
 ### Authentication Configuration
 
@@ -165,10 +166,7 @@ The server supports two authentication modes:
 
 - `AUTH_MODE`: Authentication mode (`none` or `active`, default: `active`)
 - `OPENSHIFT_API_URL`: OpenShift API server URL (required for bearer token auth)
-- `OPENSHIFT_SERVICE_ACCOUNT_TOKEN`: Service account token for API calls (for local development)
 - `OPENSHIFT_CA_CERT_PATH`: Path to CA certificate file for SSL verification (optional, only needed for custom certificates)
-- `OPENSHIFT_SSL_VERIFY`: Enable/disable SSL verification (`true`/`false`, default: `true`)
-- `AUTH_CACHE_TTL_SECONDS`: Authentication cache TTL in seconds (default: 300)
 
 #### No Authentication Mode (Development Only)
 
@@ -180,25 +178,22 @@ AUTH_MODE=none uv run python -m proms_mcp
 #### Bearer Token Authentication Mode (Default)
 
 ```bash
-# Get your OpenShift token
-export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)
-
 # Run with bearer token authentication
 AUTH_MODE=active \
 OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
-OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$OPENSHIFT_SERVICE_ACCOUNT_TOKEN \
 uv run python -m proms_mcp
 
-# For self-signed certificates, you can:
-# 1. Disable SSL verification (INSECURE - development only):
-OPENSHIFT_SSL_VERIFY=false uv run python -m proms_mcp
+# if you're authenticated on openshift already:
+AUTH_MODE=active \
+OPENSHIFT_API_URL=$(oc whoami --show-server) \
+uv run python -m proms_mcp
 
-# 2. Or provide the CA certificate (if needed for custom certificates):
+# For self-signed certificates, you can provide the CA certificate (if needed for custom certificates):
 OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt uv run python -m proms_mcp
 ```
 
-**Required RBAC for Bearer Token Authentication:**
-The server requires the `system:auth-delegator` ClusterRole to validate OpenShift tokens.
+**Authentication Implementation:**
+The server uses Kubernetes TokenReview API with self-validation to authenticate OpenShift bearer tokens. Each user's token validates itself - no special RBAC permissions are needed. Authentication is handled by a custom `TokenReviewVerifier` that integrates with FastMCP's authentication system.
 
 ### Datasource Configuration
 
@@ -238,7 +233,7 @@ The server implements basic security checks:
 
 ## API Endpoints
 
-- **POST /mcp**: MCP JSON-RPC 2.0 endpoint (port 8000)
+- **POST /mcp/**: MCP JSON-RPC 2.0 endpoint (port 8000)
 - **GET /health**: Health check (port 8080)
 - **GET /metrics**: Prometheus metrics (port 8080)
 
@@ -264,17 +259,16 @@ oc process -f openshift/deploy.yaml \
   -p OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
   | oc apply -f -
 
-# For bearer token authentication, also create the required ClusterRoleBinding:
-oc create clusterrolebinding proms-mcp-auth-delegator \
-  --clusterrole=system:auth-delegator \
-  --serviceaccount=$(oc project -q):proms-mcp-server
+# No additional RBAC setup is needed - the server uses self-validation
 ```
 
 **Template Parameters:**
 
-- `AUTH_MODE`: `none` (development) or `active` (production)
-- `OPENSHIFT_API_URL`: Required for bearer token authentication mode
-- `AUTH_CACHE_TTL_SECONDS`: Token validation cache TTL (default: 300)
+- `AUTH_MODE`: `none` (development) or `active` (production, default)
+- `OPENSHIFT_API_URL`: OpenShift API server URL (default: `https://kubernetes.default.svc` for in-cluster)
+- `OPENSHIFT_CA_CERT_PATH`: CA certificate path (default: in-cluster service account CA)
+- `NAMESPACE`: Target namespace (required)
+- `HOSTNAME`: Route hostname (required)
 
 ### MCP Client Configuration
 
@@ -313,13 +307,13 @@ export OPENSHIFT_TOKEN=$(oc whoami -t)
 
 ### RBAC Requirements
 
-For production (bearer token authentication) deployments, the server requires:
+For production (bearer token authentication) deployments:
 
-1. **ServiceAccount**: `proms-mcp-server` (created by template)
-2. **ClusterRoleBinding**: Uses `system:auth-delegator` ClusterRole for token validation (must be created separately)
+1. **ServiceAccount**: `proms-mcp-server` (created by template) - used only for pod identity
+2. **No special RBAC permissions needed**: The server uses self-validation where each user's token validates itself
 3. **User Tokens**: Users need valid OpenShift tokens (`oc whoami -t`)
 
-The template creates the ServiceAccount. The ClusterRoleBinding must be created separately using the command shown above.
+The template creates the ServiceAccount for pod identity. No ClusterRoleBindings or special permissions are required because the authentication uses self-validation.
 
 ## Development
 
@@ -333,22 +327,18 @@ make test            # Run tests with coverage
 
 ### Project Structure
 
-```
+```none
 proms-mcp/
   proms_mcp/             # Main package
-    auth/                  # Authentication module
-      __init__.py            # AuthMode enum, User model
-      backends.py            # NoAuthBackend implementation
-      middleware.py          # Authentication middleware
-      models.py              # User and AuthBackend protocol
-    server.py              # FastMCP server
+    auth.py                # TokenReview-based authentication with FastMCP integration
+    server.py              # FastMCP server with 8 MCP tools
     client.py              # Prometheus API wrapper
     config.py              # Config parser with auth support
-    monitoring.py          # Health/metrics endpoints
-  tests/                   # Test suite
-    auth/                    # Authentication tests
-  openshift/deploy.yaml    # OpenShift template with auth support
-  .cursor/mcp.json         # MCP client configuration examples
+    monitoring.py          # Health/metrics endpoints  
+    logging.py             # Structured logging configuration
+  tests/                   # Test suite (mirrors package structure)
+  openshift/deploy.yaml    # OpenShift template with RBAC support
+  local_config/            # Local development configuration
 ```
 
 ## Troubleshooting

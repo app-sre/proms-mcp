@@ -111,6 +111,9 @@ class TestPrometheusClient:
     async def test_query_instant_success(self) -> None:
         """Test successful instant query."""
         mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = b'{"status": "success", "data": {"result": []}}'
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"status": "success", "data": {"result": []}}
 
         with patch.object(
@@ -129,6 +132,9 @@ class TestPrometheusClient:
     async def test_query_instant_with_mock_response(self) -> None:
         """Test instant query with mocked successful response."""
         mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = b'{"status": "success", "data": {"result": []}}'
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"status": "success", "data": {"result": []}}
 
         with patch.object(self.client.http_client, "get", return_value=mock_response):
@@ -191,6 +197,9 @@ class TestPrometheusClient:
     async def test_query_range_success(self) -> None:
         """Test successful range query."""
         mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = b'{"status": "success", "data": {"result": []}}'
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"status": "success", "data": {"result": []}}
 
         with patch.object(
@@ -211,6 +220,11 @@ class TestPrometheusClient:
     async def test_get_metric_names_success(self) -> None:
         """Test successful metric names retrieval."""
         mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = (
+            b'{"status": "success", "data": ["up", "cpu_usage", "memory_usage"]}'
+        )
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {
             "status": "success",
             "data": ["up", "cpu_usage", "memory_usage"],
@@ -368,6 +382,9 @@ class TestPrometheusClient:
     async def test_query_instant_with_time_parameter(self) -> None:
         """Test instant query with time parameter."""
         mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.content = b'{"status": "success", "data": {"result": []}}'
+        mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {"status": "success", "data": {"result": []}}
 
         with patch.object(

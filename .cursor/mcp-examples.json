@@ -3,7 +3,7 @@
     "description": "Local development with no authentication (AUTH_MODE=none)",
     "mcpServers": {
       "proms-mcp-dev": {
-        "url": "http://localhost:8000/mcp",
+        "url": "http://localhost:8000/mcp/",
         "description": "Development server - authentication disabled"
       }
     },
@@ -17,7 +17,7 @@
     "description": "Local development with authentication enabled for testing",
     "mcpServers": {
       "proms-mcp-auth-test": {
-        "url": "http://localhost:8000/mcp",
+        "url": "http://localhost:8000/mcp/",
         "headers": {
           "Authorization": "Bearer your-openshift-token-here"
         },
@@ -35,8 +35,6 @@
       "# Start local server with authentication enabled:",
       "export AUTH_MODE=active",
       "export OPENSHIFT_API_URL=https://api.cluster.example.com:6443",
-      "export OPENSHIFT_SSL_VERIFY=false  # For dev with self-signed certs",
-      "export OPENSHIFT_SERVICE_ACCOUNT_TOKEN=$(oc whoami -t)",
       "uv run python -m proms_mcp"
     ]
   },
@@ -45,6 +43,11 @@
       "⚠️  NEVER commit .cursor/mcp.json with real tokens to git",
       "⚠️  Copy configurations above to .cursor/mcp.json and customize",
       "⚠️  Replace 'your-openshift-token-here' with actual tokens"
+    ],
+    "path_behavior": [
+      "📝 Always use '/mcp/' (with trailing slash) in URLs",
+      "📝 This avoids HTTP 307 redirects that can break authentication",
+      "📝 Some MCP clients don't resend auth headers after redirects"
     ],
     "auth_modes": [
       "🔓 AUTH_MODE=none: No authentication (development only)",

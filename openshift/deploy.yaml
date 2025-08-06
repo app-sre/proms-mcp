@@ -30,9 +30,6 @@ parameters:
 - name: QUERY_TIMEOUT
   description: "Query timeout in seconds"
   value: "30"
-- name: SHUTDOWN_TIMEOUT_SECONDS
-  description: "Graceful shutdown timeout in seconds"
-  value: "8"
 - name: SECRET_NAME
   description: "Name of the secret containing datasource configuration"
   value: "grafana-datasources"
@@ -42,18 +39,9 @@ parameters:
 - name: OPENSHIFT_API_URL
   description: "OpenShift API server URL for token validation (required for active auth)"
   value: "https://kubernetes.default.svc"
-- name: AUTH_CACHE_TTL_SECONDS
-  description: "Authentication cache TTL in seconds"
-  value: "300"
-- name: OPENSHIFT_SERVICE_ACCOUNT_TOKEN
-  description: "Service account token for API calls (optional - uses mounted token by default)"
-  required: false
 - name: OPENSHIFT_CA_CERT_PATH
   description: "Path to CA certificate file for SSL verification (optional, only needed for custom certificates)"
   value: /run/secrets/kubernetes.io/serviceaccount/ca.crt
-- name: OPENSHIFT_SSL_VERIFY
-  description: "Enable/disable SSL verification (true/false)"
-  value: "true"
 - name: NAMESPACE
   description: "Namespace where the service account is created"
   required: true
@@ -68,21 +56,6 @@ objects:
     name: proms-mcp-server
     labels:
       app: proms-mcp-server
-
-- apiVersion: rbac.authorization.k8s.io/v1
-  kind: ClusterRoleBinding
-  metadata:
-    name: proms-mcp-auth-delegator
-    labels:
-      app: proms-mcp-server
-  subjects:
-  - kind: ServiceAccount
-    name: proms-mcp-server
-    namespace: ${NAMESPACE}
-  roleRef:
-    kind: ClusterRole
-    name: system:auth-delegator
-    apiGroup: rbac.authorization.k8s.io
 
 - apiVersion: apps/v1
   kind: Deployment
@@ -122,20 +95,12 @@ objects:
             value: "${GRAFANA_DATASOURCES_PATH}"
           - name: QUERY_TIMEOUT
             value: "${QUERY_TIMEOUT}"
-          - name: SHUTDOWN_TIMEOUT_SECONDS
-            value: "${SHUTDOWN_TIMEOUT_SECONDS}"
           - name: AUTH_MODE
             value: "${AUTH_MODE}"
           - name: OPENSHIFT_API_URL
             value: "${OPENSHIFT_API_URL}"
-          - name: AUTH_CACHE_TTL_SECONDS
-            value: "${AUTH_CACHE_TTL_SECONDS}"
-          - name: OPENSHIFT_SERVICE_ACCOUNT_TOKEN
-            value: "${OPENSHIFT_SERVICE_ACCOUNT_TOKEN}"
           - name: OPENSHIFT_CA_CERT_PATH
             value: "${OPENSHIFT_CA_CERT_PATH}"
-          - name: OPENSHIFT_SSL_VERIFY
-            value: "${OPENSHIFT_SSL_VERIFY}"
           resources:
             requests:
               memory: "${MEMORY_REQUEST}"

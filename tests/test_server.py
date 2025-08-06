@@ -9,9 +9,10 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 from fastmcp import Client
 
+from proms_mcp.auth import AuthMode
 from proms_mcp.config import PrometheusDataSource
 from proms_mcp.server import (
-    app,
+    get_app,
     initialize_server,
     mcp_access_log,
     metrics_data,
@@ -90,8 +91,11 @@ class TestFastMCPServer:
     @pytest.mark.asyncio
     async def test_list_tools(self) -> None:
         """Test that all 8 tools are registered."""
-        async with Client(app) as client:
-            tools = await client.list_tools()
+        with patch("proms_mcp.server.get_auth_mode") as mock_get_auth_mode:
+            mock_get_auth_mode.return_value = AuthMode.NONE
+
+            async with Client(get_app()) as client:
+                tools = await client.list_tools()
 
         assert len(tools) == 8
 
@@ -118,7 +122,7 @@ class TestFastMCPServer:
                 "test-prometheus": Mock(url="https://prometheus.example.com")
             }
 
-            async with Client(app) as client:
+            async with Client(get_app()) as client:
                 result = await client.call_tool("list_datasources", {})
 
             # FastMCP 2.x returns a CallToolResult with content list
@@ -151,7 +155,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "query_instant",
                         {"datasource_id": "test-prometheus", "promql": "up"},
@@ -183,7 +187,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "query_range",
                         {
@@ -209,7 +213,7 @@ class TestFastMCPServer:
         with patch("proms_mcp.server.config_loader") as mock_config:
             mock_config.get_datasource.return_value = None  # Datasource not found
 
-            async with Client(app) as client:
+            async with Client(get_app()) as client:
                 result = await client.call_tool(
                     "query_instant", {"datasource_id": "nonexistent", "promql": "up"}
                 )
@@ -270,7 +274,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "list_metrics", {"datasource_id": "test-prometheus"}
                     )
@@ -299,7 +303,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "list_metrics", {"datasource_id": "test-prometheus"}
                     )
@@ -327,7 +331,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "get_metric_metadata",
                         {"datasource_id": "test-prometheus", "metric_name": "up"},
@@ -369,7 +373,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "get_metric_labels",
                         {"datasource_id": "test-prometheus", "metric_name": "up"},
@@ -402,7 +406,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "get_label_values",
                         {"datasource_id": "test-prometheus", "label_name": "job"},
@@ -431,7 +435,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "find_metrics_by_pattern",
                         {"datasource_id": "test-prometheus", "pattern": ".*usage"},
@@ -464,7 +468,7 @@ class TestFastMCPServer:
                 }
                 mock_get_client.return_value = mock_client
 
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "find_metrics_by_pattern",
                         {"datasource_id": "test-prometheus", "pattern": "[invalid"},
@@ -603,7 +607,7 @@ class TestFastMCPIntegration:
             initialize_server()
 
             # Verify tools are registered
-            async with Client(app) as client:
+            async with Client(get_app()) as client:
                 tools = await client.list_tools()
             assert len(tools) == 8
 
@@ -611,7 +615,7 @@ class TestFastMCPIntegration:
         """Test that the server is configured for stateless HTTP."""
         # Verify that the FastMCP app is configured with stateless_http=True
         # This prevents session-related errors on reconnection
-        from proms_mcp.server import app
+        app = get_app()
 
         # The stateless_http configuration should be enabled
         # We can verify the app object exists and is properly configured
@@ -624,25 +628,29 @@ class TestFastMCPIntegration:
         from proms_mcp.server import main
 
         with patch("proms_mcp.server.start_health_metrics_server") as mock_start_health:
-            with patch("uvicorn.run") as mock_uvicorn_run:
+            with patch("proms_mcp.server.app") as mock_app:
+                mock_app.run = Mock()
+
                 with patch.dict("os.environ", {"PORT": "9000", "HOST": "0.0.0.0"}):
                     main()
 
                 mock_start_health.assert_called_once()
-                mock_uvicorn_run.assert_called_once()
-
-                # Check that uvicorn was called with correct parameters
-                call_args = mock_uvicorn_run.call_args
-                assert call_args[1]["host"] == "0.0.0.0"
-                assert call_args[1]["port"] == 9000
+                mock_app.run.assert_called_once_with(
+                    transport="streamable-http",
+                    host="0.0.0.0",
+                    port=9000,
+                    path="/mcp/",
+                    log_level="info",
+                    stateless_http=True,
+                )
 
     def test_server_main_with_exception(self) -> None:
         """Test server main function handles exceptions."""
         from proms_mcp.server import main
 
         with patch("proms_mcp.server.start_health_metrics_server"):
-            with patch("uvicorn.run") as mock_uvicorn_run:
-                mock_uvicorn_run.side_effect = Exception("Server error")
+            with patch("proms_mcp.server.app") as mock_app:
+                mock_app.run = Mock(side_effect=Exception("Server error"))
 
                 with pytest.raises(Exception, match="Server error"):
                     main()
@@ -652,8 +660,8 @@ class TestFastMCPIntegration:
         from proms_mcp.server import main
 
         with patch("proms_mcp.server.start_health_metrics_server"):
-            with patch("uvicorn.run") as mock_uvicorn_run:
-                mock_uvicorn_run.side_effect = KeyboardInterrupt()
+            with patch("proms_mcp.server.app") as mock_app:
+                mock_app.run = Mock(side_effect=KeyboardInterrupt())
 
                 # Should not raise exception, just log and exit gracefully
                 main()
@@ -719,37 +727,28 @@ class TestFastMCPIntegration:
         from proms_mcp.server import main
 
         with patch("proms_mcp.server.start_health_metrics_server") as mock_start_health:
-            with patch("uvicorn.run") as mock_uvicorn_run:
+            with patch("proms_mcp.server.app") as mock_app:
+                mock_app.run = Mock()
+
                 # Clear environment to test defaults
                 with patch.dict("os.environ", {}, clear=True):
                     main()
 
                 mock_start_health.assert_called_once()
-                mock_uvicorn_run.assert_called_once()
-
-                # Check default parameters
-                call_args = mock_uvicorn_run.call_args
-                assert call_args[1]["host"] == "0.0.0.0"  # default
-                assert call_args[1]["port"] == 8000  # default
-                assert call_args[1]["timeout_graceful_shutdown"] == 8  # default
-
-    def test_server_main_with_custom_shutdown_timeout(self) -> None:
-        """Test server main with custom shutdown timeout."""
-        from proms_mcp.server import main
-
-        with patch("proms_mcp.server.start_health_metrics_server"):
-            with patch("uvicorn.run") as mock_uvicorn_run:
-                with patch.dict("os.environ", {"SHUTDOWN_TIMEOUT_SECONDS": "15"}):
-                    main()
-
-                call_args = mock_uvicorn_run.call_args
-                assert call_args[1]["timeout_graceful_shutdown"] == 15
+                mock_app.run.assert_called_once_with(
+                    transport="streamable-http",
+                    host="0.0.0.0",  # default
+                    port=8000,  # default
+                    path="/mcp/",
+                    log_level="info",
+                    stateless_http=True,
+                )
 
     @pytest.mark.asyncio
     async def test_list_datasources_with_no_config_loader(self) -> None:
         """Test list_datasources when config_loader is None."""
         with patch("proms_mcp.server.config_loader", None):
-            async with Client(app) as client:
+            async with Client(get_app()) as client:
                 result = await client.call_tool("list_datasources", {})
             data = json.loads(result.content[0].text)
 
@@ -807,7 +806,7 @@ class TestFastMCPIntegration:
                 mock_get_client.return_value = mock_client
 
                 # Test get_label_values without optional metric_name parameter
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "get_label_values",
                         {"datasource_id": "test-prometheus", "label_name": "job"},
@@ -837,7 +836,7 @@ class TestFastMCPIntegration:
                 mock_get_client.return_value = mock_client
 
                 # Test without time parameter
-                async with Client(app) as client:
+                async with Client(get_app()) as client:
                     result = await client.call_tool(
                         "query_instant",
                         {"datasource_id": "test-prometheus", "promql": "up"},
@@ -972,7 +971,7 @@ class TestFastMCPIntegration:
                 ]
 
                 for tool_name, params in tools_to_test:
-                    async with Client(app) as client:
+                    async with Client(get_app()) as client:
                         result = await client.call_tool(tool_name, params)
                     response_text = result.content[0].text
                     response_data = json.loads(response_text)
@@ -985,35 +984,4 @@ class TestFastMCPIntegration:
                     )
 
 
-class TestUnprotectedEndpoints:
-    """Test that certain endpoints don't require authentication."""
-
-    def test_health_and_metrics_endpoints_accessible_without_auth(self) -> None:
-        """Test that health and metrics endpoints are accessible without authentication when auth is enabled."""
-        from starlette.testclient import TestClient
-
-        from proms_mcp.auth.middleware import AuthenticationMiddleware
-
-        # Create a test client for the FastMCP app
-        asgi_app = app.http_app(path="/mcp", transport="streamable-http")
-
-        # Mock auth backend that always fails authentication
-        mock_auth_backend = Mock()
-        mock_auth_backend.authenticate = AsyncMock(return_value=None)
-
-        # Wrap with authentication middleware (simulating AUTH_MODE=active)
-        authenticated_app = AuthenticationMiddleware(
-            asgi_app, auth_backend=mock_auth_backend
-        )
-        client = TestClient(authenticated_app)
-
-        # Test that health and metrics endpoints are accessible even with auth middleware
-        # Note: These endpoints might not exist in the FastMCP app itself,
-        # but the middleware should allow them through without calling authenticate
-
-        # Verify that a non-whitelisted endpoint would fail
-        response = client.get("/mcp")
-        assert response.status_code == 401
-
-        # Verify that authenticate was called only once for the protected endpoint
-        assert mock_auth_backend.authenticate.call_count == 1
+# TestUnprotectedEndpoints class removed - no longer relevant with FastMCP built-in auth

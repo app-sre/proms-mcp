@@ -11,7 +11,6 @@ PORT ?= 8000
 
 # Authentication defaults for run-auth target
 OPENSHIFT_API_URL ?= 
-OPENSHIFT_SERVICE_ACCOUNT_TOKEN ?= 
 
 # Detect container engine
 CONTAINER_ENGINE := $(shell command -v podman 2>/dev/null || command -v docker 2>/dev/null || echo "")
@@ -41,7 +40,6 @@ help:
 	@echo "  IMAGE_NAME                     Container image name (default: $(IMAGE_NAME))"
 	@echo "  PORT                           Server port (default: $(PORT))"
 	@echo "  OPENSHIFT_API_URL              OpenShift API URL (required for run-auth)"
-	@echo "  OPENSHIFT_SERVICE_ACCOUNT_TOKEN Service account token (optional for run-auth)"
 	@echo ""
 	@echo "Container Engine: $(notdir $(CONTAINER_ENGINE))"
 
@@ -91,13 +89,13 @@ run-auth: check-datasources
 		echo "❌ OPENSHIFT_API_URL is required for authenticated mode"; \
 		echo ""; \
 		echo "Usage:"; \
-		echo "  make run-auth OPENSHIFT_API_URL=https://api.cluster.example.com:6443"; \
-		echo "  # Optional: OPENSHIFT_SERVICE_ACCOUNT_TOKEN=your-token"; \
+		echo "     make run-auth OPENSHIFT_API_URL=https://api.cluster.example.com:6443"; \
+		echo ' or  make run-auth OPENSHIFT_API_URL=$(oc whoami --show-server)'; \
 		echo ""; \
 		exit 1; \
 	fi
 	@echo "Using OpenShift API: $(OPENSHIFT_API_URL)"
-	AUTH_MODE=active OPENSHIFT_API_URL="$(OPENSHIFT_API_URL)" OPENSHIFT_SERVICE_ACCOUNT_TOKEN="$(OPENSHIFT_SERVICE_ACCOUNT_TOKEN)" GRAFANA_DATASOURCES_PATH="$(DATASOURCES_YAML)" uv run python -m proms_mcp
+	AUTH_MODE=active OPENSHIFT_API_URL="$(OPENSHIFT_API_URL)" GRAFANA_DATASOURCES_PATH="$(DATASOURCES_YAML)" uv run python -m proms_mcp
 
 build:
 	@echo "Building container image with $(notdir $(CONTAINER_ENGINE))..."

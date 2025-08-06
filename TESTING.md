@@ -39,7 +39,7 @@ curl -X GET http://localhost:8000/health
 
 ```bash
 # List tools
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -48,7 +48,7 @@ curl -X POST http://localhost:8000/mcp \
   }'
 
 # Call a tool
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -88,7 +88,7 @@ The server supports authentication via both Authorization header and query param
 export TOKEN="your-openshift-token-here"
 
 # List tools
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -113,7 +113,7 @@ curl -X POST "http://localhost:8000/mcp?token=$TOKEN" \
   }'
 
 # Call list_datasources tool
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -127,7 +127,7 @@ curl -X POST http://localhost:8000/mcp \
   }'
 
 # Call query_instant tool
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -149,7 +149,7 @@ curl -X POST http://localhost:8000/mcp \
 ### Missing Token (should return 401)
 
 ```bash
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -169,7 +169,7 @@ Expected response:
 ### Invalid Token (should return 401)
 
 ```bash
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer invalid-token" \
   -d '{
@@ -198,7 +198,7 @@ curl -X GET http://localhost:8000/metrics
 TOKEN=$(oc whoami -t)
 
 # Test authenticated request
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -212,7 +212,7 @@ curl -X POST http://localhost:8000/mcp \
 
 ```bash
 # List available datasources
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -226,7 +226,7 @@ curl -X POST http://localhost:8000/mcp \
   }' | jq .
 
 # Get metrics from a datasource
-curl -X POST http://localhost:8000/mcp \
+curl -X POST http://localhost:8000/mcp/ \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $TOKEN" \
   -d '{
@@ -273,7 +273,7 @@ To use the server with Cursor IDE, configure your `.cursor/mcp.json` file:
 {
   "mcpServers": {
     "proms-mcp": {
-      "url": "http://localhost:8000/mcp?token=your-openshift-token-here",
+      "url": "http://localhost:8000/mcp/?token=your-openshift-token-here",
       "description": "Proms MCP Server with OpenShift bearer token authentication"
     }
   }
@@ -286,7 +286,7 @@ To use the server with Cursor IDE, configure your `.cursor/mcp.json` file:
 {
   "mcpServers": {
     "proms-mcp-dev": {
-      "url": "http://localhost:8000/mcp",
+      "url": "http://localhost:8000/mcp/",
       "description": "Proms MCP Server - no authentication"
     }
   }
@@ -307,7 +307,6 @@ export AUTH_MODE=active        # OpenShift bearer token auth
 # OpenShift configuration (for bearer token auth mode)
 export OPENSHIFT_API_URL=https://api.your-cluster.com:6443
 export OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt  # Optional
-export OPENSHIFT_SSL_VERIFY=true               # Optional, default true
 
 # Server configuration
 export HOST=0.0.0.0            # Default - binds to all interfaces

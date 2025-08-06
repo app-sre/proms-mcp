@@ -33,6 +33,11 @@ class JSONFormatter(logging.Formatter):
 
 def configure_logging() -> None:
     """Configure structured logging for the entire application."""
+    import os
+
+    # Get log level from environment variable
+    log_level = getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO)
+
     # Configure stdlib logging first with JSON formatting
     json_formatter = structlog.stdlib.ProcessorFormatter(
         processor=structlog.processors.JSONRenderer(),
@@ -46,7 +51,7 @@ def configure_logging() -> None:
     root_logger = logging.getLogger()
     root_logger.handlers.clear()  # Remove existing handlers
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(log_level)
 
     # Configure structlog to work with stdlib logging
     structlog.configure(
@@ -76,7 +81,7 @@ def configure_logging() -> None:
         logger = logging.getLogger(logger_name)
         logger.handlers.clear()
         logger.addHandler(custom_handler)
-        logger.setLevel(logging.INFO)
+        logger.setLevel(log_level)
         logger.propagate = False  # Don't propagate to root
 
     # Keep HTTP client logs at WARNING

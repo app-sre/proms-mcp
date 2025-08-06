@@ -1,6 +1,7 @@
 """Prometheus API client wrapper with security validation."""
 
 import os
+import time
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -17,6 +18,70 @@ class PrometheusClientError(Exception):
     """Base exception for Prometheus client errors."""
 
     pass
+
+
+def prometheus_request_logger(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Decorator to log Prometheus API requests and responses."""
+
+    @wraps(func)
+    async def wrapper(
+        self: "PrometheusClient", *args: Any, **kwargs: Any
+    ) -> dict[str, Any]:
+        # Generate correlation ID for request tracking
+        correlation_id = f"prom-{int(time.time() * 1000)}-{id(args) % 10000}"
+        method_name = func.__name__
+
+        # Extract query info if available
+        query = (
+            args[0] if args and isinstance(args[0], str) else kwargs.get("query", "N/A")
+        )
+        query_preview = query[:100] + "..." if len(query) > 100 else query
+
+        logger.info(
+            f"Prometheus API call started: {method_name}",
+            correlation_id=correlation_id,
+            method=method_name,
+            datasource=self.datasource.name,
+            datasource_url=self.datasource.url,
+            query_preview=query_preview if query != "N/A" else None,
+            query_length=len(query) if query != "N/A" else 0,
+            has_auth_header=bool(self.datasource.auth_header_value),
+            timeout_seconds=self.timeout,
+        )
+
+        start_time = time.time()
+        try:
+            result = await func(self, *args, **kwargs)
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+
+            # Log successful completion
+            logger.info(
+                f"Prometheus API call completed: {method_name}",
+                correlation_id=correlation_id,
+                method=method_name,
+                datasource=self.datasource.name,
+                duration_ms=duration_ms,
+                status=result.get("status", "unknown"),
+                has_data=bool(result.get("data")),
+                result_size=len(str(result.get("data", ""))),
+            )
+
+            return result  # type: ignore[no-any-return]
+
+        except Exception as e:
+            duration_ms = round((time.time() - start_time) * 1000, 2)
+            logger.error(
+                f"Prometheus API call failed: {method_name}",
+                correlation_id=correlation_id,
+                method=method_name,
+                datasource=self.datasource.name,
+                duration_ms=duration_ms,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            raise
+
+    return wrapper
 
 
 def prometheus_error_handler(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -110,6 +175,7 @@ class PrometheusClient:
             "error": error,
         }
 
+    @prometheus_request_logger
     @prometheus_error_handler
     async def query_instant(
         self, query: str, time: str | None = None
@@ -120,12 +186,40 @@ class PrometheusClient:
             params["time"] = time
 
         url = f"{self.datasource.url}/api/v1/query"
+
+        # Log HTTP request details
+        logger.info(
+            "Prometheus HTTP request",
+            method="GET",
+            url=url,
+            params_count=len(params),
+            datasource=self.datasource.name,
+            endpoint_type="query_instant",
+        )
+
+        import time as time_module
+
+        request_start = time_module.time()
         response = await self.http_client.get(url, params=params)
+        request_duration_ms = round((time_module.time() - request_start) * 1000, 2)
+
+        logger.info(
+            "Prometheus HTTP response",
+            method="GET",
+            status_code=response.status_code,
+            response_size=len(response.content),
+            duration_ms=request_duration_ms,
+            datasource=self.datasource.name,
+            endpoint_type="query_instant",
+            content_type=response.headers.get("content-type", "unknown"),
+        )
+
         response.raise_for_status()
 
         result = response.json()
         return self._format_response(result, query)
 
+    @prometheus_request_logger
     @prometheus_error_handler
     async def query_range(
         self,
@@ -138,17 +232,73 @@ class PrometheusClient:
         params = {"query": query, "start": start, "end": end, "step": step}
 
         url = f"{self.datasource.url}/api/v1/query_range"
+
+        logger.info(
+            "Prometheus HTTP request",
+            method="GET",
+            url=url,
+            params_count=len(params),
+            datasource=self.datasource.name,
+            endpoint_type="query_range",
+            time_range=f"{start} to {end}",
+            step=step,
+        )
+
+        import time as time_module
+
+        request_start = time_module.time()
         response = await self.http_client.get(url, params=params)
+        request_duration_ms = round((time_module.time() - request_start) * 1000, 2)
+
+        logger.info(
+            "Prometheus HTTP response",
+            method="GET",
+            status_code=response.status_code,
+            response_size=len(response.content),
+            duration_ms=request_duration_ms,
+            datasource=self.datasource.name,
+            endpoint_type="query_range",
+            content_type=response.headers.get("content-type", "unknown"),
+        )
+
         response.raise_for_status()
 
         result = response.json()
         return self._format_response(result, query)
 
+    @prometheus_request_logger
     async def get_metric_names(self) -> dict[str, Any]:
         """Get all available metric names."""
         try:
             url = f"{self.datasource.url}/api/v1/label/__name__/values"
+
+            logger.info(
+                "Prometheus HTTP request",
+                method="GET",
+                url=url,
+                datasource=self.datasource.name,
+                endpoint_type="get_metric_names",
+            )
+
+            import time as time_module
+
+            request_start = time_module.time()
             response = await self.http_client.get(url)
+            request_duration_ms = round((time_module.time() - request_start) * 1000, 2)
+
+            logger.info(
+                "Prometheus HTTP response",
+                method="GET",
+                status_code=response.status_code,
+                response_size=len(response.content)
+                if hasattr(response.content, "__len__")
+                else 0,
+                duration_ms=request_duration_ms,
+                datasource=self.datasource.name,
+                endpoint_type="get_metric_names",
+                content_type=response.headers.get("content-type", "unknown"),
+            )
+
             response.raise_for_status()
 
             result = response.json()
@@ -159,6 +309,7 @@ class PrometheusClient:
             logger.error("Error getting metric names", error=str(e))
             return self._format_error(error_msg)
 
+    @prometheus_request_logger
     async def get_metric_metadata(self, metric_name: str) -> dict[str, Any]:
         """Get metadata for a specific metric."""
         try:
@@ -177,6 +328,7 @@ class PrometheusClient:
             )
             return self._format_error(error_msg)
 
+    @prometheus_request_logger
     async def get_series(self, match: str) -> dict[str, Any]:
         """Get series matching the given selector."""
         try:
@@ -193,6 +345,7 @@ class PrometheusClient:
             logger.error("Error getting series", match=match, error=str(e))
             return self._format_error(error_msg)
 
+    @prometheus_request_logger
     async def get_label_values(self, label_name: str) -> dict[str, Any]:
         """Get all values for a specific label."""
         try:

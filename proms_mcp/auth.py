@@ -1,18 +1,36 @@
-"""FastMCP TokenVerifier using Kubernetes TokenReview API."""
+"""Authentication module for proms-mcp server.
+
+Contains authentication models and TokenReview-based token verification.
+"""
 
 import time
+from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import httpx
 import structlog
 from fastmcp.server.auth import TokenVerifier
 from fastmcp.server.auth.auth import AccessToken
 
-if TYPE_CHECKING:
-    from . import User
-
 logger = structlog.get_logger()
+
+
+class AuthMode(Enum):
+    """Authentication mode configuration."""
+
+    NONE = "none"
+    ACTIVE = "active"
+
+
+@dataclass
+class User:
+    """User information from authentication."""
+
+    username: str
+    uid: str
+    groups: list[str]
+    auth_method: str
 
 
 class TokenReviewVerifier(TokenVerifier):
@@ -62,7 +80,9 @@ class TokenReviewVerifier(TokenVerifier):
                 logger.info("Using explicit CA certificate", path=ca_cert_path)
                 return ca_cert_path
             else:
-                logger.error("Explicit CA certificate path does not exist", path=ca_cert_path)
+                logger.error(
+                    "Explicit CA certificate path does not exist", path=ca_cert_path
+                )
                 raise ValueError(f"CA certificate file not found: {ca_cert_path}")
 
         # Auto-detect in-cluster CA certificate
@@ -139,14 +159,12 @@ class TokenReviewVerifier(TokenVerifier):
 
     async def _validate_token_identity(
         self, token: str, correlation_id: str
-    ) -> "User | None":
+    ) -> User | None:
         """Validate token using TokenReview API with self-validation.
 
         The token being validated is also used to authenticate the TokenReview
         request itself. This enables both in-cluster and local development usage.
         """
-        from . import User
-
         payload = {
             "kind": "TokenReview",
             "apiVersion": "authentication.k8s.io/v1",
@@ -278,3 +296,10 @@ class TokenReviewVerifier(TokenVerifier):
                     url=tokenreview_url,
                 )
                 return None
+
+
+__all__ = [
+    "AuthMode",
+    "User",
+    "TokenReviewVerifier",
+]

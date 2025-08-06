@@ -33,12 +33,11 @@ A lean MCP (Model Context Protocol) server that provides LLM agents with transpa
 
 **Production dependencies:**
 
-- `mcp>=1.12.0` - Model Context Protocol library with FastMCP
-- `fastmcp-http>=0.1.4` - HTTP transport for MCP
-- `pyyaml>=6.0` - YAML configuration parsing
-- `httpx>=0.24.0` - HTTP client for Prometheus API calls
-- `structlog>=23.0.0` - Structured logging
-- `pydantic>=2.0.0` - Data validation and serialization
+- `fastmcp>=2.11.0` - Modern MCP library with built-in HTTP transport and authentication
+- `pyyaml>=6.0.2` - YAML configuration parsing
+- `httpx>=0.28.0` - HTTP client for Prometheus API calls and TokenReview authentication
+- `structlog>=24.4.0` - Structured logging
+- `pydantic>=2.11.0` - Data validation and serialization
 
 **Development dependencies:**
 
@@ -50,18 +49,21 @@ A lean MCP (Model Context Protocol) server that provides LLM agents with transpa
 
 ```none
 /app/
-  server.py              # FastMCP server with @tool decorators
-  client.py              # Prometheus API wrapper
-  config.py              # Grafana YAML config parser
-  monitoring.py          # Health and metrics HTTP endpoints
-  pyproject.toml        # uv project configuration
-  Dockerfile            # Container definition
-  README.md             # Usage instructions + local development
-  Makefile              # Development commands
+  proms_mcp/
+    server.py            # FastMCP server with @tool decorators and auth integration
+    client.py            # Prometheus API wrapper
+    config.py            # Grafana YAML config parser with auth mode support
+    auth.py              # TokenReview-based authentication for FastMCP
+    monitoring.py        # Health and metrics HTTP endpoints
+    logging.py           # Structured logging configuration
+  pyproject.toml         # uv project configuration
+  Dockerfile             # Container definition
+  README.md              # Usage instructions + local development
+  Makefile               # Development commands
   /openshift/
-    deploy.yaml         # OpenShift Template for deployment
+    deploy.yaml          # OpenShift Template with RBAC support
   /tests/
-    test_*.py           # Unit and integration tests
+    test_*.py            # Unit and integration tests
 ```
 
 ## Configuration Management
@@ -230,6 +232,9 @@ This ensures reliable shutdown behavior even with persistent client connections 
 - `LOG_LEVEL`: Logging level (default: INFO)
 - `GRAFANA_DATASOURCES_PATH`: Path to datasource config file (default: /etc/grafana/provisioning/datasources/datasources.yaml)
 - `QUERY_TIMEOUT`: Query timeout in seconds (default: 30)
+- `AUTH_MODE`: Authentication mode (`none` or `active`, default: `active`)
+- `OPENSHIFT_API_URL`: OpenShift API server URL for TokenReview authentication
+- `OPENSHIFT_CA_CERT_PATH`: Optional CA certificate path for custom TLS verification
 
 ### Resource Limits
 
@@ -256,11 +261,13 @@ This ensures reliable shutdown behavior even with persistent client connections 
 
 ### Authentication
 
-- **MCP Endpoint**: Bearer token authentication using OpenShift tokens
-- **Prometheus Connections**: Bearer token authentication only using credentials from Grafana datasource config
+- **MCP Endpoint**: TokenReview-based bearer token authentication using OpenShift tokens
+- **Authentication Provider**: Custom `TokenReviewVerifier` implementing FastMCP's `TokenVerifier` interface
+- **Token Validation**: Self-validation via Kubernetes TokenReview API (no special RBAC permissions needed)
+- **TLS Security**: Automatic CA certificate detection (in-cluster or system CA store)
+- **Prometheus Connections**: Bearer token authentication using credentials from Grafana datasource config
 - Authentication via `jsonData.httpHeaderName1` and `secureJsonData.httpHeaderValue1` fields
-- No credential storage beyond runtime memory
-- Validate all input parameters
+- **Security**: No credential storage beyond runtime memory, comprehensive audit logging
 
 ### Network Security
 
@@ -281,9 +288,10 @@ Note: Advanced security patterns were removed to keep the implementation lean. H
 
 **FastMCP Implementation Requirements:**
 
-- **Library**: Use MCP library v1.12.2+ with FastMCP
+- **Library**: Use FastMCP library v2.11.0+ with built-in HTTP transport and authentication
 - **Decorator pattern**: Implement all tools using `@app.tool()` decorators
-- **Server initialization**: Create FastMCP app instance with project name
+- **Authentication**: Integrate custom `TokenReviewVerifier` with FastMCP's auth system
+- **Server initialization**: Create FastMCP app instance with auth provider
 - **Tool registration**: Automatic tool registration and routing via decorators
 - **Type hints**: Use proper Python type hints for all tool parameters and return types
 - **Documentation**: Include docstrings for all tools for automatic MCP tool descriptions
@@ -393,14 +401,17 @@ The implementation is complete when:
 
 **Template Components:**
 
-- Deployment with configurable resources
-- Service exposing port 8000
-- ConfigMap mount for datasource configuration at `/etc/grafana/provisioning/datasources/`
+- **ServiceAccount**: `proms-mcp-server` for pod identity (no special permissions needed)
+- **Deployment**: Configurable resources with authentication environment variables
+- **Service**: Exposes ports 8000 (MCP) and 8080 (health/metrics)
+- **Route**: TLS-enabled external access with cert-manager integration
+- **PodDisruptionBudget**: Ensures high availability
+- **Secret mount**: Datasource configuration at `/etc/grafana/provisioning/datasources/`
 
 **Prerequisites (not included in template):**
 
 - **Secret requirement**: OpenShift Secret containing Grafana datasource YAML files
-- **Secret name**: Must be referenced in template for volume mounting
+- **Secret name**: Must be referenced in template for volume mounting (default: `grafana-datasources`)
 - **Secret type**: Opaque with `stringData.datasources.yaml` key
 - **Content format**: Standard Grafana datasource YAML with prometheus and other datasources
 - **Mixed datasources**: Can include non-prometheus datasources (will be filtered out)

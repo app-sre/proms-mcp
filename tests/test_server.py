@@ -744,8 +744,6 @@ class TestFastMCPIntegration:
                     stateless_http=True,
                 )
 
-
-
     @pytest.mark.asyncio
     async def test_list_datasources_with_no_config_loader(self) -> None:
         """Test list_datasources when config_loader is None."""

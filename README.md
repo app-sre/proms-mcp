@@ -192,8 +192,8 @@ uv run python -m proms_mcp
 OPENSHIFT_CA_CERT_PATH=/path/to/ca.crt uv run python -m proms_mcp
 ```
 
-**Required RBAC for Bearer Token Authentication:**
-The server requires the `system:auth-delegator` ClusterRole to validate OpenShift tokens.
+**Authentication Implementation:**
+The server uses Kubernetes TokenReview API with self-validation to authenticate OpenShift bearer tokens. Each user's token validates itself - no special RBAC permissions are needed. Authentication is handled by a custom `TokenReviewVerifier` that integrates with FastMCP's authentication system.
 
 ### Datasource Configuration
 
@@ -259,16 +259,16 @@ oc process -f openshift/deploy.yaml \
   -p OPENSHIFT_API_URL=https://api.cluster.example.com:6443 \
   | oc apply -f -
 
-# For bearer token authentication, also create the required ClusterRoleBinding:
-oc create clusterrolebinding proms-mcp-auth-delegator \
-  --clusterrole=system:auth-delegator \
-  --serviceaccount=$(oc project -q):proms-mcp-server
+# No additional RBAC setup is needed - the server uses self-validation
 ```
 
 **Template Parameters:**
 
-- `AUTH_MODE`: `none` (development) or `active` (production)
-- `OPENSHIFT_API_URL`: Required for bearer token authentication mode
+- `AUTH_MODE`: `none` (development) or `active` (production, default)
+- `OPENSHIFT_API_URL`: OpenShift API server URL (default: `https://kubernetes.default.svc` for in-cluster)
+- `OPENSHIFT_CA_CERT_PATH`: CA certificate path (default: in-cluster service account CA)
+- `NAMESPACE`: Target namespace (required)
+- `HOSTNAME`: Route hostname (required)
 
 ### MCP Client Configuration
 
@@ -307,13 +307,13 @@ export OPENSHIFT_TOKEN=$(oc whoami -t)
 
 ### RBAC Requirements
 
-For production (bearer token authentication) deployments, the server requires:
+For production (bearer token authentication) deployments:
 
-1. **ServiceAccount**: `proms-mcp-server` (created by template)
-2. **ClusterRoleBinding**: Uses `system:auth-delegator` ClusterRole for token validation (must be created separately)
+1. **ServiceAccount**: `proms-mcp-server` (created by template) - used only for pod identity
+2. **No special RBAC permissions needed**: The server uses self-validation where each user's token validates itself
 3. **User Tokens**: Users need valid OpenShift tokens (`oc whoami -t`)
 
-The template creates the ServiceAccount. The ClusterRoleBinding must be created separately using the command shown above.
+The template creates the ServiceAccount for pod identity. No ClusterRoleBindings or special permissions are required because the authentication uses self-validation.
 
 ## Development
 
@@ -330,19 +330,15 @@ make test            # Run tests with coverage
 ```none
 proms-mcp/
   proms_mcp/             # Main package
-    auth/                  # Authentication module
-      __init__.py            # AuthMode enum, User model, exports
-      cache.py               # Token caching for performance
-      fastmcp_auth.py        # FastMCP OpenShiftTokenVerifier integration
-      openshift.py           # OpenShift API client
-    server.py              # FastMCP server
+    auth.py                # TokenReview-based authentication with FastMCP integration
+    server.py              # FastMCP server with 8 MCP tools
     client.py              # Prometheus API wrapper
     config.py              # Config parser with auth support
-    monitoring.py          # Health/metrics endpoints
-  tests/                   # Test suite
-    auth/                    # Authentication tests
-  openshift/deploy.yaml    # OpenShift template with auth support
-  .cursor/mcp.json         # MCP client configuration examples
+    monitoring.py          # Health/metrics endpoints  
+    logging.py             # Structured logging configuration
+  tests/                   # Test suite (mirrors package structure)
+  openshift/deploy.yaml    # OpenShift template with RBAC support
+  local_config/            # Local development configuration
 ```
 
 ## Troubleshooting

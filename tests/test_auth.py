@@ -1,6 +1,7 @@
-"""Tests for TokenReview-based authentication."""
+"""Tests for authentication functionality."""
 
 import json
+import os
 import time
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -8,10 +9,93 @@ import httpx
 import pytest
 from fastmcp.server.auth.auth import AccessToken
 
-from proms_mcp.auth import User
-from proms_mcp.auth.tokenreview_auth import TokenReviewVerifier
+from proms_mcp.auth import AuthMode, TokenReviewVerifier, User
+from proms_mcp.config import get_auth_mode
 
 
+# User model tests
+def test_user_creation() -> None:
+    """Test User model creation."""
+    user = User(
+        username="testuser",
+        uid="test-uid-123",
+        groups=["admin", "developers"],
+        auth_method="test",
+    )
+
+    assert user.username == "testuser"
+    assert user.uid == "test-uid-123"
+    assert user.groups == ["admin", "developers"]
+    assert user.auth_method == "test"
+
+
+def test_user_equality() -> None:
+    """Test User model equality."""
+    user1 = User(
+        username="testuser", uid="test-uid-123", groups=["admin"], auth_method="test"
+    )
+
+    user2 = User(
+        username="testuser", uid="test-uid-123", groups=["admin"], auth_method="test"
+    )
+
+    user3 = User(
+        username="different", uid="test-uid-123", groups=["admin"], auth_method="test"
+    )
+
+    assert user1 == user2
+    assert user1 != user3
+
+
+def test_user_with_empty_groups() -> None:
+    """Test User model with empty groups list."""
+    user = User(username="testuser", uid="test-uid-123", groups=[], auth_method="test")
+
+    assert user.groups == []
+    assert len(user.groups) == 0
+
+
+# Auth config tests
+def test_get_auth_mode_default() -> None:
+    """Test get_auth_mode returns ACTIVE by default."""
+    with patch.dict(os.environ, {}, clear=True):
+        auth_mode = get_auth_mode()
+        assert auth_mode == AuthMode.ACTIVE
+
+
+def test_get_auth_mode_none() -> None:
+    """Test get_auth_mode with AUTH_MODE=none."""
+    with patch.dict(os.environ, {"AUTH_MODE": "none"}):
+        auth_mode = get_auth_mode()
+        assert auth_mode == AuthMode.NONE
+
+
+def test_get_auth_mode_active() -> None:
+    """Test get_auth_mode with AUTH_MODE=active."""
+    with patch.dict(os.environ, {"AUTH_MODE": "active"}):
+        auth_mode = get_auth_mode()
+        assert auth_mode == AuthMode.ACTIVE
+
+
+def test_get_auth_mode_case_insensitive() -> None:
+    """Test get_auth_mode is case insensitive."""
+    with patch.dict(os.environ, {"AUTH_MODE": "NONE"}):
+        auth_mode = get_auth_mode()
+        assert auth_mode == AuthMode.NONE
+
+    with patch.dict(os.environ, {"AUTH_MODE": "Active"}):
+        auth_mode = get_auth_mode()
+        assert auth_mode == AuthMode.ACTIVE
+
+
+def test_get_auth_mode_invalid_defaults_to_active() -> None:
+    """Test get_auth_mode defaults to ACTIVE for invalid values."""
+    with patch.dict(os.environ, {"AUTH_MODE": "invalid"}):
+        auth_mode = get_auth_mode()
+        assert auth_mode == AuthMode.ACTIVE
+
+
+# TokenReview tests (consolidated from the original test_tokenreview_auth.py)
 class TestTokenReviewVerifier:
     """Test cases for TokenReviewVerifier class."""
 
@@ -72,7 +156,7 @@ class TestTokenReviewVerifier:
         """Test successful token verification."""
         token = "valid-bearer-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
@@ -80,6 +164,7 @@ class TestTokenReviewVerifier:
             mock_response.status_code = 200
             mock_response.content = b'{"status": "success"}'  # Mock content for logging
             mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"status": "success"}'
             mock_response.json.return_value = mock_successful_tokenreview_response
             mock_client.post.return_value = mock_response
 
@@ -114,12 +199,15 @@ class TestTokenReviewVerifier:
         """Test token verification when authentication fails."""
         token = "invalid-bearer-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
             mock_response = Mock()
             mock_response.status_code = 200
+            mock_response.content = b'{"status": {"authenticated": false}}'
+            mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"status": {"authenticated": false}}'
             mock_response.json.return_value = mock_failed_tokenreview_response
             mock_client.post.return_value = mock_response
 
@@ -132,13 +220,15 @@ class TestTokenReviewVerifier:
         """Test token verification when API returns error."""
         token = "some-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
             mock_response = Mock()
             mock_response.status_code = 401
             mock_response.text = "Unauthorized"
+            mock_response.content = b"Unauthorized"
+            mock_response.headers = {"content-type": "text/plain"}
             mock_client.post.return_value = mock_response
 
             access_token = await verifier.verify_token(token)
@@ -150,7 +240,7 @@ class TestTokenReviewVerifier:
         """Test token verification with timeout."""
         token = "some-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
@@ -165,7 +255,7 @@ class TestTokenReviewVerifier:
         """Test token verification with HTTP error."""
         token = "some-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
@@ -182,12 +272,15 @@ class TestTokenReviewVerifier:
         """Test token verification with invalid JSON response."""
         token = "some-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
             mock_response = Mock()
             mock_response.status_code = 200
+            mock_response.content = b"invalid json"
+            mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = "invalid json"
             mock_response.json.side_effect = json.JSONDecodeError("Invalid JSON", "", 0)
             mock_client.post.return_value = mock_response
 
@@ -202,7 +295,7 @@ class TestTokenReviewVerifier:
         """Test successful token identity validation."""
         token = "valid-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
@@ -210,6 +303,7 @@ class TestTokenReviewVerifier:
             mock_response.status_code = 200
             mock_response.content = b'{"status": "success"}'  # Mock content for logging
             mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"status": "success"}'
             mock_response.json.return_value = mock_successful_tokenreview_response
             mock_client.post.return_value = mock_response
 
@@ -238,7 +332,7 @@ class TestTokenReviewVerifier:
             },
         }
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
@@ -246,6 +340,7 @@ class TestTokenReviewVerifier:
             mock_response.status_code = 200
             mock_response.content = b'{"status": {"authenticated": true}}'
             mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"status": {"authenticated": true}}'
             mock_response.json.return_value = response_without_user
             mock_client.post.return_value = mock_response
 
@@ -276,14 +371,19 @@ class TestTokenReviewVerifier:
             },
         }
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.content = b'{"status": {"authenticated": true, "user": {"username": "testuser"}}}'
+            mock_response.content = (
+                b'{"status": {"authenticated": true, "user": {"username": "testuser"}}}'
+            )
             mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = (
+                '{"status": {"authenticated": true, "user": {"username": "testuser"}}}'
+            )
             mock_response.json.return_value = response_partial_user
             mock_client.post.return_value = mock_response
 
@@ -302,12 +402,15 @@ class TestTokenReviewVerifier:
         """Test that HTTP client is configured with correct timeout."""
         token = "some-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
             mock_response = Mock()
             mock_response.status_code = 200
+            mock_response.content = b'{"status": {"authenticated": false}}'
+            mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"status": {"authenticated": false}}'
             mock_response.json.return_value = {"status": {"authenticated": False}}
             mock_client.post.return_value = mock_response
 
@@ -336,7 +439,7 @@ class TestTokenReviewVerifier:
 
     def test_ca_cert_path_explicit(self) -> None:
         """Test explicit CA certificate path."""
-        with patch("pathlib.Path.exists", return_value=True):
+        with patch("proms_mcp.auth.Path.exists", return_value=True):
             verifier = TokenReviewVerifier(
                 api_url="https://api.cluster.example.com:6443",
                 ca_cert_path="/custom/ca.crt",
@@ -345,8 +448,10 @@ class TestTokenReviewVerifier:
 
     def test_ca_cert_path_explicit_not_exists(self) -> None:
         """Test explicit CA certificate path that doesn't exist - should raise ValueError."""
-        with patch("pathlib.Path.exists", return_value=False):
-            with pytest.raises(ValueError, match="CA certificate file not found: /nonexistent/ca.crt"):
+        with patch("proms_mcp.auth.Path.exists", return_value=False):
+            with pytest.raises(
+                ValueError, match="CA certificate file not found: /nonexistent/ca.crt"
+            ):
                 TokenReviewVerifier(
                     api_url="https://api.cluster.example.com:6443",
                     ca_cert_path="/nonexistent/ca.crt",
@@ -361,7 +466,7 @@ class TestTokenReviewVerifier:
         )
         token = "test-token"
 
-        with patch("httpx.AsyncClient") as mock_client_class:
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
             mock_client_class.return_value.__aenter__.return_value = mock_client
 
@@ -369,6 +474,7 @@ class TestTokenReviewVerifier:
             mock_response.status_code = 200
             mock_response.content = b'{"status": {"authenticated": true}}'
             mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"status": {"authenticated": true}}'
             mock_response.json.return_value = {"status": {"authenticated": False}}
             mock_client.post.return_value = mock_response
 
@@ -383,7 +489,7 @@ class TestTokenReviewVerifier:
         def mock_exists(self: object) -> bool:
             return str(self) == "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
-        with patch("pathlib.Path.exists", mock_exists):
+        with patch("proms_mcp.auth.Path.exists", mock_exists):
             verifier = TokenReviewVerifier(
                 api_url="https://api.cluster.example.com:6443", ca_cert_path=None
             )
@@ -394,7 +500,7 @@ class TestTokenReviewVerifier:
 
     def test_ca_cert_path_no_cert_available(self) -> None:
         """Test when no CA certificate is available."""
-        with patch("pathlib.Path.exists", return_value=False):
+        with patch("proms_mcp.auth.Path.exists", return_value=False):
             verifier = TokenReviewVerifier(
                 api_url="https://api.cluster.example.com:6443", ca_cert_path=None
             )

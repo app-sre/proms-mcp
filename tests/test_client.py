@@ -221,7 +221,9 @@ class TestPrometheusClient:
         """Test successful metric names retrieval."""
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.content = b'{"status": "success", "data": ["up", "cpu_usage", "memory_usage"]}'
+        mock_response.content = (
+            b'{"status": "success", "data": ["up", "cpu_usage", "memory_usage"]}'
+        )
         mock_response.headers = {"content-type": "application/json"}
         mock_response.json.return_value = {
             "status": "success",

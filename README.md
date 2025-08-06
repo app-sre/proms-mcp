@@ -106,7 +106,7 @@ The server supports two authentication modes:
 {
   "mcpServers": {
     "proms-mcp-dev": {
-      "url": "http://localhost:8000/mcp",
+              "url": "http://localhost:8000/mcp/",
       "description": "Development server - no authentication"
     }
   }
@@ -142,11 +142,13 @@ See `.cursor/mcp-examples.json` for complete configuration examples including:
 
 The server exposes MCP over HTTP at:
 
-- **Endpoint**: `POST http://localhost:8000/mcp` (or your deployed URL)
+- **Endpoint**: `POST http://localhost:8000/mcp/` (or your deployed URL)
 - **Protocol**: JSON-RPC 2.0 over HTTP
 - **Content-Type**: `application/json`
 - **Accept**: `application/json, text/event-stream`
 - **Authentication**: Bearer token in `Authorization` header (when `AUTH_MODE=active`)
+
+> 📝 **Path Behavior**: The server uses `/mcp/` (with trailing slash) to avoid HTTP 307 redirects that can cause authentication issues in some MCP clients. Always use the trailing slash in your client configurations.
 
 ## Configuration
 
@@ -238,7 +240,7 @@ The server implements basic security checks:
 
 ## API Endpoints
 
-- **POST /mcp**: MCP JSON-RPC 2.0 endpoint (port 8000)
+- **POST /mcp/**: MCP JSON-RPC 2.0 endpoint (port 8000)
 - **GET /health**: Health check (port 8080)
 - **GET /metrics**: Prometheus metrics (port 8080)
 

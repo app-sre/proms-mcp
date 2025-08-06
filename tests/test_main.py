@@ -18,21 +18,31 @@ class TestMainModule:
         assert hasattr(proms_mcp.__main__, "main")
         assert callable(proms_mcp.__main__.main)
 
-    @patch("uvicorn.run")
+    @patch("proms_mcp.server.app")
     @patch("proms_mcp.server.start_health_metrics_server")
     def test_main_function_import(
-        self, mock_start_health: Mock, mock_uvicorn_run: Mock
+        self, mock_start_health: Mock, mock_app: Mock
     ) -> None:
         """Test that main function is properly imported from server."""
         from proms_mcp.__main__ import main
+
+        # Mock the app.run method
+        mock_app.run = Mock()
 
         # Call the main function
         main()
 
         # Verify the health server was started
         mock_start_health.assert_called_once()
-        # Verify uvicorn.run was called
-        mock_uvicorn_run.assert_called_once()
+        # Verify app.run was called with correct parameters
+        mock_app.run.assert_called_once_with(
+            transport="streamable-http",
+            host="0.0.0.0",
+            port=8000,
+            path="/mcp/",
+            log_level="info",
+            stateless_http=True,
+        )
 
     def test_module_structure(self) -> None:
         """Test that the module has the expected structure."""

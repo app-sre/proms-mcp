@@ -49,4 +49,6 @@ temp/
 # Local development
 local_config/*
 !local_config/datasources-example.yaml
+
 .cursor/mcp.json
+.gemini/settings.json

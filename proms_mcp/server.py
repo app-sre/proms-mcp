@@ -239,16 +239,16 @@ def initialize_server() -> None:
         # Get optional CA certificate path
         ca_cert_path = os.getenv("OPENSHIFT_CA_CERT_PATH")
 
-        # Create TokenReview-based verifier
-        from .auth import TokenReviewVerifier
+        # Create OpenShift user info based verifier
+        from .auth import OpenShiftUserVerifier
 
-        auth_provider = TokenReviewVerifier(
+        auth_provider = OpenShiftUserVerifier(
             api_url=openshift_api_url,
             required_scopes=["read:data"],
             ca_cert_path=ca_cert_path,
         )
         logger.info(
-            "Using TokenReview authentication",
+            "Using OpenShift user info authentication",
             api_url=openshift_api_url,
             ca_cert_path=ca_cert_path or "auto-detected",
         )

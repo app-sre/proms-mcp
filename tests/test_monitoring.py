@@ -16,31 +16,32 @@ from proms_mcp.monitoring import (
 class TestMonitoring:
     """Test the monitoring functionality."""
 
-    def test_get_health_data(self) -> None:
+    @patch("proms_mcp.monitoring.get_auth_cache_size", return_value=2)
+    def test_get_health_data(self, mock_cache_size: Mock) -> None:
         """Test health data generation."""
         start_time = time.time()
         metrics_data = {
             "server_start_time": start_time,
             "datasources_configured": 3,
-            "connected_clients": 2,
         }
 
         health_data = get_health_data(metrics_data)
 
         assert health_data["status"] == "healthy"
         assert health_data["datasources_configured"] == 3
-        assert health_data["connected_clients"] == 2
+        assert health_data["cached_auth_entries"] == 2
         assert "uptime_seconds" in health_data
         assert health_data["uptime_seconds"] >= 0
+        mock_cache_size.assert_called_once()
 
-    def test_get_prometheus_metrics_empty(self) -> None:
+    @patch("proms_mcp.monitoring.get_auth_cache_size", return_value=0)
+    def test_get_prometheus_metrics_empty(self, mock_cache_size: Mock) -> None:
         """Test Prometheus metrics generation with empty data."""
         metrics_data = {
             "tool_requests_total": defaultdict(lambda: defaultdict(int)),
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 0,
-            "connected_clients": 0,
         }
 
         metrics_text = get_prometheus_metrics(metrics_data)
@@ -49,16 +50,17 @@ class TestMonitoring:
         assert "# TYPE proms_mcp_tool_requests_total counter" in metrics_text
         assert "# HELP proms_mcp_datasources_configured" in metrics_text
         assert "proms_mcp_datasources_configured 0" in metrics_text
-        assert "proms_mcp_connected_clients 0" in metrics_text
+        assert "proms_mcp_cached_auth_entries 0" in metrics_text
+        mock_cache_size.assert_called_once()
 
-    def test_get_prometheus_metrics_with_data(self) -> None:
+    @patch("proms_mcp.monitoring.get_auth_cache_size", return_value=1)
+    def test_get_prometheus_metrics_with_data(self, mock_cache_size: Mock) -> None:
         """Test Prometheus metrics generation with sample data."""
         metrics_data: dict[str, Any] = {
             "tool_requests_total": defaultdict(lambda: defaultdict(int)),
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 2,
-            "connected_clients": 1,
         }
 
         # Add some sample data
@@ -91,7 +93,8 @@ class TestMonitoring:
 
         # Check gauges
         assert "proms_mcp_datasources_configured 2" in metrics_text
-        assert "proms_mcp_connected_clients 1" in metrics_text
+        assert "proms_mcp_cached_auth_entries 1" in metrics_text
+        mock_cache_size.assert_called_once()
 
         # Check histogram data
         assert (
@@ -110,7 +113,6 @@ class TestMonitoring:
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 0,
-            "connected_clients": 0,
         }
 
         # Add durations that should fall into different buckets
@@ -165,7 +167,6 @@ class TestMonitoring:
             "tool_request_durations": {"empty_tool": []},
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 0,
-            "connected_clients": 0,
         }
 
         metrics_text = get_prometheus_metrics(metrics_data)
@@ -182,7 +183,6 @@ class TestMonitoring:
             },
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 0,
-            "connected_clients": 0,
         }
 
         metrics_text = get_prometheus_metrics(metrics_data)
@@ -208,7 +208,6 @@ class TestHealthMetricsHandler:
         self.metrics_data: dict[str, Any] = {
             "server_start_time": time.time(),
             "datasources_configured": 2,
-            "connected_clients": 1,
             "tool_requests_total": defaultdict(lambda: defaultdict(int)),
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
@@ -304,35 +303,35 @@ class TestHealthMetricsIntegration:
     def test_health_data_with_edge_cases(self) -> None:
         """Test health data generation with edge case values."""
         # Test with very recent start time
-        recent_start = time.time() - 0.1
-        metrics_data = {
-            "server_start_time": recent_start,
-            "datasources_configured": 0,
-            "connected_clients": 0,
-        }
+        with patch("proms_mcp.monitoring.get_auth_cache_size", return_value=0):
+            recent_start = time.time() - 0.1
+            metrics_data = {
+                "server_start_time": recent_start,
+                "datasources_configured": 0,
+            }
 
-        health_data = get_health_data(metrics_data)
+            health_data = get_health_data(metrics_data)
 
-        assert health_data["status"] == "healthy"
-        assert health_data["datasources_configured"] == 0
-        assert health_data["connected_clients"] == 0
-        assert health_data["uptime_seconds"] >= 0
-        assert health_data["uptime_seconds"] < 1  # Should be very small
+            assert health_data["status"] == "healthy"
+            assert health_data["datasources_configured"] == 0
+            assert health_data["cached_auth_entries"] == 0
+            assert health_data["uptime_seconds"] >= 0
+            assert health_data["uptime_seconds"] < 1  # Should be very small
 
         # Test with large values
-        old_start = time.time() - 86400  # 1 day ago
-        metrics_data = {
-            "server_start_time": old_start,
-            "datasources_configured": 100,
-            "connected_clients": 50,
-        }
+        with patch("proms_mcp.monitoring.get_auth_cache_size", return_value=50):
+            old_start = time.time() - 86400  # 1 day ago
+            metrics_data = {
+                "server_start_time": old_start,
+                "datasources_configured": 100,
+            }
 
-        health_data = get_health_data(metrics_data)
+            health_data = get_health_data(metrics_data)
 
-        assert health_data["status"] == "healthy"
-        assert health_data["datasources_configured"] == 100
-        assert health_data["connected_clients"] == 50
-        assert health_data["uptime_seconds"] > 86000  # Close to 1 day
+            assert health_data["status"] == "healthy"
+            assert health_data["datasources_configured"] == 100
+            assert health_data["cached_auth_entries"] == 50
+            assert health_data["uptime_seconds"] > 86000  # Close to 1 day
 
     def test_prometheus_metrics_with_special_characters(self) -> None:
         """Test metrics generation with special characters in tool names."""
@@ -341,7 +340,6 @@ class TestHealthMetricsIntegration:
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 1,
-            "connected_clients": 1,
         }
 
         # Add data with special characters (should be handled properly)
@@ -363,7 +361,6 @@ class TestHealthMetricsIntegration:
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 0,
-            "connected_clients": 0,
         }
 
         # Test with very small durations
@@ -406,7 +403,6 @@ class TestHealthMetricsIntegration:
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 0,
-            "connected_clients": 0,
         }
 
         # Add some zero values explicitly
@@ -425,16 +421,16 @@ class TestHealthMetricsIntegration:
             in metrics_text
         )
         assert "proms_mcp_datasources_configured 0" in metrics_text
-        assert "proms_mcp_connected_clients 0" in metrics_text
+        assert "proms_mcp_cached_auth_entries 0" in metrics_text
 
-    def test_prometheus_metrics_large_dataset(self) -> None:
+    @patch("proms_mcp.monitoring.get_auth_cache_size", return_value=500)
+    def test_prometheus_metrics_large_dataset(self, mock_cache_size: Mock) -> None:
         """Test metrics generation with large datasets."""
         metrics_data: dict[str, Any] = {
             "tool_requests_total": defaultdict(lambda: defaultdict(int)),
             "tool_request_durations": defaultdict(list),
             "server_requests_total": defaultdict(lambda: defaultdict(int)),
             "datasources_configured": 1000,
-            "connected_clients": 500,
         }
 
         # Add many tools and endpoints
@@ -454,7 +450,8 @@ class TestHealthMetricsIntegration:
 
         # Verify large values are handled correctly
         assert "proms_mcp_datasources_configured 1000" in metrics_text
-        assert "proms_mcp_connected_clients 500" in metrics_text
+        assert "proms_mcp_cached_auth_entries 500" in metrics_text
+        mock_cache_size.assert_called_once()
 
         # Verify some of the generated metrics exist
         assert 'tool="tool_10"' in metrics_text

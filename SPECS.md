@@ -177,7 +177,7 @@ All tools must return structured JSON with consistent formatting:
 - **Health Endpoint**: `GET /health` on port 8080 (configurable via HEALTH_METRICS_PORT)
 - **Metrics Endpoint**: `GET /metrics` on port 8080 (Prometheus format)
 - **Implementation**: Dedicated `monitoring.py` module with HTTP server in background thread
-- **Health Response**: JSON with status, uptime, datasource count, connected clients
+- **Health Response**: JSON with status, uptime, datasource count, cached auth entries
 - **Metrics Format**: Standard Prometheus metrics format with histograms and counters
 - **Modular Design**: Separated from main MCP server for clean architecture
 
@@ -331,7 +331,7 @@ Note: Advanced security patterns were removed to keep the implementation lean. H
 - `proms_mcp_tool_request_duration_seconds`: Histogram by tool name with buckets
 - `proms_mcp_server_requests_total`: Counter by HTTP method and endpoint
 - `proms_mcp_datasources_configured`: Gauge of configured datasources
-- `proms_mcp_connected_clients`: Gauge of active client connections (basic tracking)
+- `proms_mcp_cached_auth_entries`: Gauge of cached authentication entries
 
 **Implementation Requirements:**
 

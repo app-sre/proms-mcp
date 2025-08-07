@@ -39,6 +39,11 @@ def clear_auth_cache() -> None:
     _auth_cache.clear()
 
 
+def get_auth_cache_size() -> int:
+    """Get the current size of the authentication cache."""
+    return len(_auth_cache)
+
+
 class AuthMode(Enum):
     """Authentication mode configuration."""
 
@@ -205,4 +210,5 @@ __all__ = [
     "AuthMode",
     "User",
     "OpenShiftUserVerifier",
+    "get_auth_cache_size",
 ]

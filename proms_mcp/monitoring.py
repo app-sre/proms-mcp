@@ -9,6 +9,8 @@ from typing import Any
 
 import structlog
 
+from .auth import get_auth_cache_size
+
 logger = structlog.get_logger()
 
 
@@ -69,7 +71,7 @@ def get_health_data(metrics_data: dict[str, Any]) -> dict[str, Any]:
         "status": "healthy",  # Could be made dynamic based on server state
         "uptime_seconds": time.time() - metrics_data["server_start_time"],
         "datasources_configured": metrics_data["datasources_configured"],
-        "connected_clients": metrics_data["connected_clients"],
+        "cached_auth_entries": get_auth_cache_size(),
     }
 
 
@@ -143,10 +145,12 @@ def get_prometheus_metrics(metrics_data: dict[str, Any]) -> str:
         f"proms_mcp_datasources_configured {metrics_data['datasources_configured']}"
     )
 
-    # Connected clients
-    lines.append("# HELP proms_mcp_connected_clients Number of connected MCP clients")
-    lines.append("# TYPE proms_mcp_connected_clients gauge")
-    lines.append(f"proms_mcp_connected_clients {metrics_data['connected_clients']}")
+    # Cached auth entries
+    lines.append(
+        "# HELP proms_mcp_cached_auth_entries Number of cached authentication entries"
+    )
+    lines.append("# TYPE proms_mcp_cached_auth_entries gauge")
+    lines.append(f"proms_mcp_cached_auth_entries {get_auth_cache_size()}")
 
     return "\n".join(lines) + "\n"
 

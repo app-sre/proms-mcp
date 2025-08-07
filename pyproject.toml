@@ -10,7 +10,7 @@ authors = [
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "fastmcp>=2.11.0",
+    "fastmcp>=2.11.2",
     "pyyaml>=6.0.2",
     "httpx>=0.28.0",
     "structlog>=24.4.0",

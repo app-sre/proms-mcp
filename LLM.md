@@ -5,7 +5,7 @@ alwaysApply: true
 
 # LLM Development Guide for Proms MCP Server
 
-> **Note**: This file is also available as `GEMINI.md` and `.cursor/rules/LLM.md` (both are symlinks to this file).
+> **Note**: This file is also available as `GEMINI.md` and `.cursor/rules/LLM.mdc` (both are symlinks to this file).
 
 Essential workflow guidance for AI assistants working on this codebase.
 

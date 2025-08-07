@@ -36,6 +36,9 @@ parameters:
 - name: AUTH_MODE
   description: "Authentication mode (none, active)"
   value: "active"
+- name: AUTH_CACHE_TTL_SECONDS
+  description: "Authentication cache TTL in seconds (default: 300 = 5 minutes)"
+  value: "300"
 - name: OPENSHIFT_API_URL
   description: "OpenShift API server URL for token validation (required for active auth)"
   value: "https://kubernetes.default.svc"
@@ -97,6 +100,8 @@ objects:
             value: "${QUERY_TIMEOUT}"
           - name: AUTH_MODE
             value: "${AUTH_MODE}"
+          - name: AUTH_CACHE_TTL_SECONDS
+            value: "${AUTH_CACHE_TTL_SECONDS}"
           - name: OPENSHIFT_API_URL
             value: "${OPENSHIFT_API_URL}"
           - name: OPENSHIFT_CA_CERT_PATH

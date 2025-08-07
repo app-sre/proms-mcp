@@ -1,8 +1,10 @@
 """Authentication module for proms-mcp server.
 
-Contains authentication models and TokenReview-based token verification.
+Contains authentication models and OpenShift user info based token verification.
 """
 
+import hashlib
+import os
 import ssl
 import time
 from dataclasses import dataclass
@@ -11,10 +13,30 @@ from pathlib import Path
 
 import httpx
 import structlog
+from asyncache import cached  # type: ignore[import-untyped]
+from cachetools import TTLCache
 from fastmcp.server.auth import TokenVerifier
 from fastmcp.server.auth.auth import AccessToken
 
 logger = structlog.get_logger()
+
+# Auth cache TTL from environment (default: 5 minutes)
+_AUTH_CACHE_TTL_SECONDS = int(os.getenv("AUTH_CACHE_TTL_SECONDS", "300"))
+
+# Authentication cache: configurable TTL, max 1000 entries, thread-safe
+_auth_cache: TTLCache[str, "User | None"] = TTLCache(
+    maxsize=1000, ttl=_AUTH_CACHE_TTL_SECONDS
+)
+
+
+def _cache_key(token: str) -> str:
+    """Secure cache key from token hash."""
+    return hashlib.sha256(token.encode()).hexdigest()[:16]
+
+
+def clear_auth_cache() -> None:
+    """Clear the authentication cache. Useful for testing."""
+    _auth_cache.clear()
 
 
 class AuthMode(Enum):
@@ -30,16 +52,15 @@ class User:
 
     username: str
     uid: str
-    groups: list[str]
     auth_method: str
 
 
-class TokenReviewVerifier(TokenVerifier):
-    """FastMCP TokenVerifier using Kubernetes TokenReview API.
+class OpenShiftUserVerifier(TokenVerifier):
+    """FastMCP TokenVerifier using OpenShift user info endpoint.
 
-    This implementation uses self-validation: the token being validated
-    is also used to authenticate the TokenReview request itself. This
-    approach works both in-cluster and for local development.
+    This implementation uses the OpenShift user info API (/apis/user.openshift.io/v1/users/~)
+    to validate tokens. This endpoint is accessible to all authenticated users and doesn't
+    require special permissions like system:auth-delegator.
     """
 
     def __init__(
@@ -48,7 +69,7 @@ class TokenReviewVerifier(TokenVerifier):
         required_scopes: list[str] | None = None,
         ca_cert_path: str | None = None,
     ):
-        """Initialize the TokenReview verifier.
+        """Initialize the OpenShift user info verifier.
 
         Args:
             api_url: OpenShift/Kubernetes API server URL
@@ -97,83 +118,36 @@ class TokenReviewVerifier(TokenVerifier):
         return None
 
     async def verify_token(self, token: str) -> AccessToken | None:
-        """Verify token using Kubernetes TokenReview API."""
-        start_time = time.time()
-        token_prefix = token[:8] + "..." if len(token) > 8 else "short-token"
-        correlation_id = f"auth-{int(time.time() * 1000)}-{id(token) % 10000}"
+        """Verify token using OpenShift user info API."""
+        # Validate token and get user identity
+        user = await self._validate_token_identity(token)
 
-        logger.info(
-            "Token verification started",
-            correlation_id=correlation_id,
-            token_prefix=token_prefix,
-            token_length=len(token),
-            api_url=self.api_url,
-            ca_cert_configured=bool(self.ca_cert_path),
-            tls_verification="custom_ca" if self.ca_cert_path else "system_ca",
-        )
-
-        try:
-            # Validate token and get user identity
-            user = await self._validate_token_identity(token, correlation_id)
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-
-            if not user:
-                logger.warning(
-                    "Token validation failed",
-                    correlation_id=correlation_id,
-                    token_prefix=token_prefix,
-                    duration_ms=duration_ms,
-                    reason="authentication_rejected",
-                )
-                return None
-
-            logger.info(
-                "Token validation successful",
-                correlation_id=correlation_id,
-                username=user.username,
-                uid=user.uid[:8] + "..." if len(user.uid) > 8 else user.uid,
-                groups_count=len(user.groups),
-                auth_method=user.auth_method,
-                duration_ms=duration_ms,
-            )
-
-            # All authenticated users get read-only access (proms-mcp is read-only)
-            return AccessToken(
-                token=token,
-                client_id=user.username,
-                scopes=["read:data"],  # Read-only access for Prometheus queries
-                expires_at=int(time.time()) + 3600,  # 1 hour
-                resource="proms-mcp-server",
-            )
-
-        except Exception as e:
-            duration_ms = round((time.time() - start_time) * 1000, 2)
-            logger.error(
-                "Token verification failed",
-                correlation_id=correlation_id,
-                token_prefix=token_prefix,
-                duration_ms=duration_ms,
-                error=str(e),
-                error_type=type(e).__name__,
-            )
+        if not user:
+            logger.warning("Authentication failed - invalid token")
             return None
 
-    async def _validate_token_identity(
-        self, token: str, correlation_id: str
-    ) -> User | None:
-        """Validate token using TokenReview API with self-validation.
+        logger.info(
+            "Authentication successful",
+            username=user.username,
+        )
 
-        The token being validated is also used to authenticate the TokenReview
-        request itself. This enables both in-cluster and local development usage.
+        # All authenticated users get read-only access (proms-mcp is read-only)
+        return AccessToken(
+            token=token,
+            client_id=user.username,
+            scopes=["read:data"],  # Read-only access for Prometheus queries
+            expires_at=int(time.time()) + 3600,  # 1 hour
+            resource="proms-mcp-server",
+        )
+
+    @cached(_auth_cache, key=lambda self, token: _cache_key(token))  # type: ignore[misc]
+    async def _validate_token_identity(self, token: str) -> User | None:
+        """Validate token using OpenShift user info API.
+
+        Uses the /apis/user.openshift.io/v1/users/~ endpoint which is accessible
+        to all authenticated users without requiring special permissions.
         """
-        payload = {
-            "kind": "TokenReview",
-            "apiVersion": "authentication.k8s.io/v1",
-            "spec": {"token": token},
-        }
-
         # Configure HTTP client with proper CA certificate verification
-        # Always verify TLS - either with custom CA or system CA store
         if self.ca_cert_path:
             # Use custom CA certificate with ssl.create_default_context()
             ssl_context = ssl.create_default_context(cafile=self.ca_cert_path)
@@ -182,128 +156,53 @@ class TokenReviewVerifier(TokenVerifier):
             # Use system CA certificate store
             verify = True
 
-        tokenreview_url = f"{self.api_url}/apis/authentication.k8s.io/v1/tokenreviews"
-
-        logger.info(
-            "TokenReview API request initiated",
-            correlation_id=correlation_id,
-            url=tokenreview_url,
-            payload_size=len(str(payload)),
-            timeout_seconds=10.0,
-            tls_verify="custom_ca" if isinstance(verify, ssl.SSLContext) else "system_ca",
-        )
+        userinfo_url = f"{self.api_url}/apis/user.openshift.io/v1/users/~"
 
         async with httpx.AsyncClient(timeout=10.0, verify=verify) as client:
-            request_start = time.time()
             try:
-                response = await client.post(
-                    tokenreview_url,
-                    json=payload,
-                    headers={"Authorization": f"Bearer {token}"},  # Self-validation
-                )
-
-                request_duration_ms = round((time.time() - request_start) * 1000, 2)
-
-                logger.info(
-                    "TokenReview API response received",
-                    correlation_id=correlation_id,
-                    status_code=response.status_code,
-                    response_size=len(response.content),
-                    duration_ms=request_duration_ms,
-                    content_type=response.headers.get("content-type", "unknown"),
+                response = await client.get(
+                    userinfo_url,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Accept": "application/json",
+                        "User-Agent": "proms-mcp/1.0.0",
+                    },
                 )
 
                 if response.status_code not in (200, 201):
-                    logger.warning(
-                        "TokenReview API request failed",
-                        correlation_id=correlation_id,
-                        status_code=response.status_code,
-                        response_preview=response.text[:200],
-                        duration_ms=request_duration_ms,
-                    )
                     return None
 
                 result = response.json()
-                status = result.get("status", {})
-                authenticated = status.get("authenticated", False)
 
-                logger.info(
-                    "TokenReview API response parsed",
-                    correlation_id=correlation_id,
-                    authenticated=authenticated,
-                    has_user_info=bool(status.get("user")),
-                    has_error=bool(status.get("error")),
-                )
-
-                if not authenticated:
-                    error_info = status.get("error", {})
-                    logger.warning(
-                        "Token not authenticated by TokenReview",
-                        correlation_id=correlation_id,
-                        error_code=error_info.get("code"),
-                        error_message=error_info.get("message", "No error details"),
-                    )
-                    return None
-
-                user_info = status.get("user", {})
-                username = user_info.get("username", "")
-                uid = user_info.get("uid", "")
-                groups = user_info.get("groups", [])
-
-                logger.info(
-                    "User identity extracted from TokenReview",
-                    correlation_id=correlation_id,
-                    username=username,
-                    uid_prefix=uid[:8] + "..." if len(uid) > 8 else uid,
-                    groups_count=len(groups),
-                    groups_preview=groups[:3]
-                    if groups
-                    else [],  # First 3 groups for visibility
-                )
+                # Extract user information from OpenShift user object
+                username = result.get("metadata", {}).get("name", "")
+                uid = result.get("metadata", {}).get("uid", "")
 
                 return User(
                     username=username,
                     uid=uid,
-                    groups=groups,
-                    auth_method="tokenreview",
+                    auth_method="openshift-userinfo",
                 )
 
-            except httpx.TimeoutException:
-                request_duration_ms = round((time.time() - request_start) * 1000, 2)
+            except (
+                httpx.TimeoutException,
+                httpx.ConnectError,
+                httpx.NetworkError,
+            ) as e:
+                # These are system errors - we can't reach OpenShift API
                 logger.error(
-                    "TokenReview API request timed out",
-                    correlation_id=correlation_id,
-                    timeout_seconds=10.0,
-                    duration_ms=request_duration_ms,
-                    url=tokenreview_url,
-                )
-                return None
-            except httpx.HTTPStatusError as e:
-                request_duration_ms = round((time.time() - request_start) * 1000, 2)
-                logger.error(
-                    "TokenReview API HTTP error",
-                    correlation_id=correlation_id,
-                    status_code=e.response.status_code,
-                    error_detail=str(e),
-                    duration_ms=request_duration_ms,
-                    url=tokenreview_url,
-                )
-                return None
-            except Exception as e:
-                request_duration_ms = round((time.time() - request_start) * 1000, 2)
-                logger.error(
-                    "TokenReview API request failed",
-                    correlation_id=correlation_id,
+                    "Authentication failed - cannot reach OpenShift API",
                     error=str(e),
                     error_type=type(e).__name__,
-                    duration_ms=request_duration_ms,
-                    url=tokenreview_url,
                 )
+                return None
+            except Exception:
+                # Other errors (like JSON parsing) are also user/token issues
                 return None
 
 
 __all__ = [
     "AuthMode",
     "User",
-    "TokenReviewVerifier",
+    "OpenShiftUserVerifier",
 ]

@@ -2,6 +2,7 @@
 
 import json
 import os
+import ssl
 import time
 from unittest.mock import AsyncMock, Mock, patch
 
@@ -505,3 +506,44 @@ class TestTokenReviewVerifier:
                 api_url="https://api.cluster.example.com:6443", ca_cert_path=None
             )
             assert verifier.ca_cert_path is None
+
+    @pytest.mark.asyncio
+    async def test_ssl_context_with_custom_ca(self) -> None:
+        """Test that SSL context is properly created when using custom CA certificate."""
+        with patch("proms_mcp.auth.Path.exists", return_value=True):
+            verifier = TokenReviewVerifier(
+                api_url="https://api.cluster.example.com:6443",
+                ca_cert_path="/custom/ca.crt",
+            )
+            token = "test-token"
+
+            # Mock ssl.create_default_context to return a mock SSL context
+            mock_ssl_context = Mock(spec=ssl.SSLContext)
+
+            with (
+                patch(
+                    "proms_mcp.auth.ssl.create_default_context",
+                    return_value=mock_ssl_context,
+                ),
+                patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class,
+            ):
+                mock_client = AsyncMock()
+                mock_client_class.return_value.__aenter__.return_value = mock_client
+
+                mock_response = Mock()
+                mock_response.status_code = 200
+                mock_response.content = b'{"status": {"authenticated": false}}'
+                mock_response.headers = {"content-type": "application/json"}
+                mock_response.text = '{"status": {"authenticated": false}}'
+                mock_response.json.return_value = {"status": {"authenticated": False}}
+                mock_client.post.return_value = mock_response
+
+                await verifier._validate_token_identity(token, "test-correlation-id")
+
+                # Verify client was created with SSL context (not string path)
+                mock_client_class.assert_called_once()
+                call_args = mock_client_class.call_args
+                assert call_args[1]["timeout"] == 10.0
+                verify_param = call_args[1]["verify"]
+                # Should be the mocked SSL context
+                assert verify_param is mock_ssl_context

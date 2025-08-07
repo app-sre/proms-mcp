@@ -3,7 +3,8 @@
 Contains authentication models and OpenShift user info based token verification.
 """
 
-import ssl
+import hashlib
+import os
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -11,10 +12,30 @@ from pathlib import Path
 
 import httpx
 import structlog
+from asyncache import cached  # type: ignore[import-untyped]
+from cachetools import TTLCache
 from fastmcp.server.auth import TokenVerifier
 from fastmcp.server.auth.auth import AccessToken
 
 logger = structlog.get_logger()
+
+# Auth cache TTL from environment (default: 5 minutes)
+_AUTH_CACHE_TTL_SECONDS = int(os.getenv("AUTH_CACHE_TTL_SECONDS", "300"))
+
+# Authentication cache: configurable TTL, max 1000 entries, thread-safe
+_auth_cache: TTLCache[str, "User | None"] = TTLCache(
+    maxsize=1000, ttl=_AUTH_CACHE_TTL_SECONDS
+)
+
+
+def _cache_key(token: str) -> str:
+    """Secure cache key from token hash."""
+    return hashlib.sha256(token.encode()).hexdigest()[:16]
+
+
+def clear_auth_cache() -> None:
+    """Clear the authentication cache. Useful for testing."""
+    _auth_cache.clear()
 
 
 class AuthMode(Enum):
@@ -118,6 +139,7 @@ class OpenShiftUserVerifier(TokenVerifier):
             resource="proms-mcp-server",
         )
 
+    @cached(_auth_cache, key=lambda self, token: _cache_key(token))  # type: ignore[misc]
     async def _validate_token_identity(self, token: str) -> User | None:
         """Validate token using OpenShift user info API.
 

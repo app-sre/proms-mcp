@@ -9,7 +9,7 @@ import httpx
 import pytest
 from fastmcp.server.auth.auth import AccessToken
 
-from proms_mcp.auth import AuthMode, OpenShiftUserVerifier, User
+from proms_mcp.auth import AuthMode, OpenShiftUserVerifier, User, clear_auth_cache
 from proms_mcp.config import get_auth_mode
 
 
@@ -82,6 +82,11 @@ def test_get_auth_mode_invalid_defaults_to_active() -> None:
 # TokenReview tests (consolidated from the original test_tokenreview_auth.py)
 class TestOpenShiftUserVerifier:
     """Test cases for OpenShiftUserVerifier class."""
+
+    @pytest.fixture(autouse=True)
+    def clear_cache(self) -> None:
+        """Clear auth cache before each test."""
+        clear_auth_cache()
 
     @pytest.fixture
     def verifier(self) -> OpenShiftUserVerifier:
@@ -563,3 +568,71 @@ class TestOpenShiftUserVerifier:
                 assert user is None
                 # Verify NO ERROR log for token issues (handled at higher level)
                 mock_logger.error.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_authentication_caching(self) -> None:
+        """Test that successful authentication results are cached."""
+        verifier = OpenShiftUserVerifier(
+            api_url="https://api.cluster.example.com:6443", ca_cert_path=None
+        )
+        token = "cache-test-token"
+
+        user_response = {
+            "kind": "User",
+            "apiVersion": "user.openshift.io/v1",
+            "metadata": {
+                "name": "cached-user",
+                "uid": "cached-uid-123",
+                "creationTimestamp": "2023-01-01T00:00:00Z",
+            },
+            "identities": [],
+        }
+
+        with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
+            mock_client = AsyncMock()
+            mock_client_class.return_value.__aenter__.return_value = mock_client
+
+            mock_response = Mock()
+            mock_response.status_code = 200
+            mock_response.content = b'{"kind": "User"}'
+            mock_response.headers = {"content-type": "application/json"}
+            mock_response.text = '{"kind": "User"}'
+            mock_response.json.return_value = user_response
+            mock_client.get.return_value = mock_response
+
+            # First call - should hit the API
+            user1 = await verifier._validate_token_identity(token)
+            assert user1 is not None
+            assert user1.username == "cached-user"
+            assert user1.uid == "cached-uid-123"
+
+            # Second call with same token - should use cache
+            user2 = await verifier._validate_token_identity(token)
+            assert user2 is not None
+            assert user2.username == "cached-user"
+            assert user2.uid == "cached-uid-123"
+
+            # Verify API was only called once (first call), second was cached
+            mock_client.get.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_auth_cache_ttl_environment_variable(self) -> None:
+        """Test that AUTH_CACHE_TTL_SECONDS environment variable is respected."""
+        import os
+        from unittest.mock import patch
+
+        # Test with custom TTL
+        with patch.dict(os.environ, {"AUTH_CACHE_TTL_SECONDS": "600"}):
+            # Re-import to get new cache with updated TTL
+            import importlib
+
+            import proms_mcp.auth
+
+            importlib.reload(proms_mcp.auth)
+
+            # Verify the cache was created with the custom TTL
+            assert proms_mcp.auth._AUTH_CACHE_TTL_SECONDS == 600
+            assert proms_mcp.auth._auth_cache.ttl == 600
+
+        # Clean up and restore original module state
+        importlib.reload(proms_mcp.auth)

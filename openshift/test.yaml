@@ -1,0 +1,147 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: proms-mcp-test
+  annotations:
+    description: "Test Job for Proms MCP Server - calls list_datasources tool"
+    tags: "prometheus,mcp,test,job"
+parameters:
+- name: IMAGE_TAG
+  description: "Image tag to use for the test job"
+  required: true
+- name: JOBID
+  generate: expression
+  from: "[0-9a-z]{7}"
+- name: HOSTNAME
+  description: "Hostname of the Proms MCP server"
+  required: true
+- name: TIMEOUT_SECONDS
+  description: "Curl timeout in seconds"
+  value: "10"
+- name: MAX_RETRIES
+  description: "Maximum number of curl retries"
+  value: "2"
+
+objects:
+- apiVersion: batch/v1
+  kind: Job
+  metadata:
+    name: "proms-mcp-test-${IMAGE_TAG}-${JOBID}"
+    labels:
+      app: proms-mcp-test
+  spec:
+    ttlSecondsAfterFinished: 300  # Clean up job after 5 minutes
+    backoffLimit: 1
+    template:
+      metadata:
+        labels:
+          app: proms-mcp-test
+      spec:
+        restartPolicy: Never
+        serviceAccountName: proms-mcp-server  # Use the same service account as the server
+        containers:
+        - name: curl-test
+          image: registry.redhat.io/ubi8/ubi-minimal:latest
+          command:
+          - /bin/bash
+          - -c
+          - |
+            set -euo pipefail
+            
+            echo "🚀 Starting Proms MCP Server test..."
+            echo "Target URL: https://${MCP_SERVER_HOSTNAME}/mcp/"
+            echo "Timeout: ${TIMEOUT_SECONDS}s"
+            echo "Max retries: ${MAX_RETRIES}"
+            
+            # Get the service account token
+            echo "🔑 Reading service account token..."
+            TOKEN=$(cat /run/secrets/kubernetes.io/serviceaccount/token)
+            echo "✅ Token loaded"
+            
+            # Prepare the MCP request payload for list_datasources tool
+            REQUEST_PAYLOAD='{
+              "jsonrpc": "2.0",
+              "id": 1,
+              "method": "tools/call",
+              "params": {
+                "name": "list_datasources",
+                "arguments": {}
+              }
+            }'
+            
+            echo "📡 Making request to MCP server..."
+            
+            # Make the curl request with error details on failure
+            RESPONSE=$(curl \
+              --silent \
+              --max-time "${TIMEOUT_SECONDS}" \
+              --retry "${MAX_RETRIES}" \
+              --retry-delay 2 \
+              --write-out "HTTPSTATUS:%{http_code};SIZE:%{size_download};TIME:%{time_total}" \
+              --header "Authorization: Bearer $TOKEN" \
+              --header "Accept: application/json, text/event-stream" \
+              --header "Content-Type: application/json" \
+              --data "$REQUEST_PAYLOAD" \
+              "https://${MCP_SERVER_HOSTNAME}/mcp/")
+            
+            # Extract HTTP code and response body
+            HTTP_CODE=$(echo "$RESPONSE" | grep -o "HTTPSTATUS:[0-9]*" | cut -d: -f2)
+            RESPONSE_SIZE=$(echo "$RESPONSE" | grep -o "SIZE:[0-9]*" | cut -d: -f2)
+            RESPONSE_TIME=$(echo "$RESPONSE" | grep -o "TIME:[0-9.]*" | cut -d: -f2)
+            RESPONSE_BODY=$(echo "$RESPONSE" | sed 's/HTTPSTATUS:[0-9]*;SIZE:[0-9]*;TIME:[0-9.]*$//')
+            
+            echo "📊 HTTP Response Code: $HTTP_CODE"
+            echo "📏 Response Size: ${RESPONSE_SIZE} bytes"
+            echo "⏱️  Response Time: ${RESPONSE_TIME}s"
+            
+            # Check if we got a successful HTTP response (< 400)
+            if [[ "$HTTP_CODE" -ge 400 ]]; then
+              echo ""
+              echo "❌ ERROR: HTTP request failed with code $HTTP_CODE"
+              
+              # Show common error explanations
+              case "$HTTP_CODE" in
+                401) echo "🔐 Authentication failed - check service account token permissions" ;;
+                403) echo "🚫 Forbidden - service account may lack required permissions" ;;
+                404) echo "🔍 Not found - check server hostname and path" ;;
+                500) echo "💥 Server error - check MCP server logs" ;;
+                502|503|504) echo "🌐 Gateway/proxy error - check network connectivity" ;;
+                *) echo "❓ Unexpected error code" ;;
+              esac
+              
+              # Show response body if available
+              if [[ -n "$RESPONSE_BODY" && "$RESPONSE_BODY" != *"HTTPSTATUS"* ]]; then
+                echo ""
+                echo "📄 Response body:"
+                echo "$RESPONSE_BODY"
+              fi
+              
+              # Show debug info for troubleshooting
+              echo ""
+              echo "🔍 Debug info:"
+              echo "  Server: https://${MCP_SERVER_HOSTNAME}/mcp/"
+              echo "  Service account: $(cat /run/secrets/kubernetes.io/serviceaccount/namespace 2>/dev/null || echo 'unknown')/proms-mcp-server"
+              
+              exit 1
+            fi
+            
+            echo ""
+            echo "✅ Test completed successfully!"
+            echo "✅ MCP server is responding (HTTP $HTTP_CODE)"
+            echo "✅ Authentication is working"
+            echo "✅ Server is healthy"
+            
+          env:
+          - name: MCP_SERVER_HOSTNAME
+            value: "${HOSTNAME}"
+          - name: TIMEOUT_SECONDS
+            value: "${TIMEOUT_SECONDS}"
+          - name: MAX_RETRIES
+            value: "${MAX_RETRIES}"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"

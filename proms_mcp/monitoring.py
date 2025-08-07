@@ -78,17 +78,21 @@ def get_prometheus_metrics(metrics_data: dict[str, Any]) -> str:
     lines = []
 
     # MCP tool requests total
-    lines.append("# HELP mcp_tool_requests_total Total number of MCP tool requests")
-    lines.append("# TYPE mcp_tool_requests_total counter")
+    lines.append(
+        "# HELP proms_mcp_tool_requests_total Total number of MCP tool requests"
+    )
+    lines.append("# TYPE proms_mcp_tool_requests_total counter")
     for tool, statuses in metrics_data["tool_requests_total"].items():
         for status, count in statuses.items():
             lines.append(
-                f'mcp_tool_requests_total{{tool="{tool}",status="{status}"}} {count}'
+                f'proms_mcp_tool_requests_total{{tool="{tool}",status="{status}"}} {count}'
             )
 
     # MCP tool request duration
-    lines.append("# HELP mcp_tool_request_duration_seconds MCP tool request durations")
-    lines.append("# TYPE mcp_tool_request_duration_seconds histogram")
+    lines.append(
+        "# HELP proms_mcp_tool_request_duration_seconds MCP tool request durations"
+    )
+    lines.append("# TYPE proms_mcp_tool_request_duration_seconds histogram")
     for tool, durations in metrics_data["tool_request_durations"].items():
         if durations:
             # Simple histogram buckets
@@ -108,39 +112,41 @@ def get_prometheus_metrics(metrics_data: dict[str, Any]) -> str:
             for i, (bucket, count) in enumerate(zip(buckets, counts)):
                 cumulative += count
                 lines.append(
-                    f'mcp_tool_request_duration_seconds_bucket{{tool="{tool}",le="{bucket}"}} {cumulative}'
+                    f'proms_mcp_tool_request_duration_seconds_bucket{{tool="{tool}",le="{bucket}"}} {cumulative}'
                 )
 
             lines.append(
-                f'mcp_tool_request_duration_seconds_bucket{{tool="{tool}",le="+Inf"}} {total_count}'
+                f'proms_mcp_tool_request_duration_seconds_bucket{{tool="{tool}",le="+Inf"}} {total_count}'
             )
             lines.append(
-                f'mcp_tool_request_duration_seconds_count{{tool="{tool}"}} {total_count}'
+                f'proms_mcp_tool_request_duration_seconds_count{{tool="{tool}"}} {total_count}'
             )
             lines.append(
-                f'mcp_tool_request_duration_seconds_sum{{tool="{tool}"}} {total_sum}'
+                f'proms_mcp_tool_request_duration_seconds_sum{{tool="{tool}"}} {total_sum}'
             )
 
     # Server requests total
-    lines.append("# HELP mcp_server_requests_total Total number of HTTP requests")
-    lines.append("# TYPE mcp_server_requests_total counter")
+    lines.append("# HELP proms_mcp_server_requests_total Total number of HTTP requests")
+    lines.append("# TYPE proms_mcp_server_requests_total counter")
     for method, endpoints in metrics_data["server_requests_total"].items():
         for endpoint, count in endpoints.items():
             lines.append(
-                f'mcp_server_requests_total{{method="{method}",endpoint="{endpoint}"}} {count}'
+                f'proms_mcp_server_requests_total{{method="{method}",endpoint="{endpoint}"}} {count}'
             )
 
     # Datasources configured
     lines.append(
-        "# HELP mcp_datasources_configured Number of configured Prometheus datasources"
+        "# HELP proms_mcp_datasources_configured Number of configured Prometheus datasources"
     )
-    lines.append("# TYPE mcp_datasources_configured gauge")
-    lines.append(f"mcp_datasources_configured {metrics_data['datasources_configured']}")
+    lines.append("# TYPE proms_mcp_datasources_configured gauge")
+    lines.append(
+        f"proms_mcp_datasources_configured {metrics_data['datasources_configured']}"
+    )
 
     # Connected clients
-    lines.append("# HELP mcp_connected_clients Number of connected MCP clients")
-    lines.append("# TYPE mcp_connected_clients gauge")
-    lines.append(f"mcp_connected_clients {metrics_data['connected_clients']}")
+    lines.append("# HELP proms_mcp_connected_clients Number of connected MCP clients")
+    lines.append("# TYPE proms_mcp_connected_clients gauge")
+    lines.append(f"proms_mcp_connected_clients {metrics_data['connected_clients']}")
 
     return "\n".join(lines) + "\n"
 

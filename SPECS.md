@@ -327,11 +327,11 @@ Note: Advanced security patterns were removed to keep the implementation lean. H
 
 **Prometheus Metrics Collected:**
 
-- `mcp_tool_requests_total`: Counter by tool name and status
-- `mcp_tool_request_duration_seconds`: Histogram by tool name with buckets
-- `mcp_server_requests_total`: Counter by HTTP method and endpoint
-- `mcp_datasources_configured`: Gauge of configured datasources
-- `mcp_connected_clients`: Gauge of active client connections (basic tracking)
+- `proms_mcp_tool_requests_total`: Counter by tool name and status
+- `proms_mcp_tool_request_duration_seconds`: Histogram by tool name with buckets
+- `proms_mcp_server_requests_total`: Counter by HTTP method and endpoint
+- `proms_mcp_datasources_configured`: Gauge of configured datasources
+- `proms_mcp_connected_clients`: Gauge of active client connections (basic tracking)
 
 **Implementation Requirements:**
 

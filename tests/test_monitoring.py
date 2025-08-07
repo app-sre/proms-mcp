@@ -45,11 +45,11 @@ class TestMonitoring:
 
         metrics_text = get_prometheus_metrics(metrics_data)
 
-        assert "# HELP mcp_tool_requests_total" in metrics_text
-        assert "# TYPE mcp_tool_requests_total counter" in metrics_text
-        assert "# HELP mcp_datasources_configured" in metrics_text
-        assert "mcp_datasources_configured 0" in metrics_text
-        assert "mcp_connected_clients 0" in metrics_text
+        assert "# HELP proms_mcp_tool_requests_total" in metrics_text
+        assert "# TYPE proms_mcp_tool_requests_total counter" in metrics_text
+        assert "# HELP proms_mcp_datasources_configured" in metrics_text
+        assert "proms_mcp_datasources_configured 0" in metrics_text
+        assert "proms_mcp_connected_clients 0" in metrics_text
 
     def test_get_prometheus_metrics_with_data(self) -> None:
         """Test Prometheus metrics generation with sample data."""
@@ -75,31 +75,31 @@ class TestMonitoring:
 
         # Check tool requests
         assert (
-            'mcp_tool_requests_total{tool="list_datasources",status="success"} 5'
+            'proms_mcp_tool_requests_total{tool="list_datasources",status="success"} 5'
             in metrics_text
         )
         assert (
-            'mcp_tool_requests_total{tool="query_instant",status="error"} 1'
+            'proms_mcp_tool_requests_total{tool="query_instant",status="error"} 1'
             in metrics_text
         )
 
         # Check server requests
         assert (
-            'mcp_server_requests_total{method="GET",endpoint="/health"} 10'
+            'proms_mcp_server_requests_total{method="GET",endpoint="/health"} 10'
             in metrics_text
         )
 
         # Check gauges
-        assert "mcp_datasources_configured 2" in metrics_text
-        assert "mcp_connected_clients 1" in metrics_text
+        assert "proms_mcp_datasources_configured 2" in metrics_text
+        assert "proms_mcp_connected_clients 1" in metrics_text
 
         # Check histogram data
         assert (
-            'mcp_tool_request_duration_seconds_count{tool="list_datasources"} 3'
+            'proms_mcp_tool_request_duration_seconds_count{tool="list_datasources"} 3'
             in metrics_text
         )
         assert (
-            'mcp_tool_request_duration_seconds_sum{tool="list_datasources"} 0.45'
+            'proms_mcp_tool_request_duration_seconds_sum{tool="list_datasources"} 0.45'
             in metrics_text
         )
 
@@ -128,19 +128,19 @@ class TestMonitoring:
         # 800ms (0.8s) -> le="1.0" bucket: 1 + 1 = 2 (but algorithm is different)
         # Let's just check the structure is correct
         assert (
-            'mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="0.1"} 1'
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="0.1"} 1'
             in metrics_text
         )
         assert (
-            'mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="+Inf"} 4'
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="+Inf"} 4'
             in metrics_text
         )
         assert (
-            'mcp_tool_request_duration_seconds_count{tool="test_tool"} 4'
+            'proms_mcp_tool_request_duration_seconds_count{tool="test_tool"} 4'
             in metrics_text
         )
         assert (
-            'mcp_tool_request_duration_seconds_sum{tool="test_tool"} 14.85'
+            'proms_mcp_tool_request_duration_seconds_sum{tool="test_tool"} 14.85'
             in metrics_text
         )
 
@@ -195,7 +195,7 @@ class TestMonitoring:
         # Verify +Inf bucket
         assert 'le="+Inf"' in metrics_text
         assert (
-            'mcp_tool_request_duration_seconds_count{tool="complex_tool"} 7'
+            'proms_mcp_tool_request_duration_seconds_count{tool="complex_tool"} 7'
             in metrics_text
         )
 
@@ -387,15 +387,15 @@ class TestHealthMetricsIntegration:
 
         # Verify counts are correct
         assert (
-            'mcp_tool_request_duration_seconds_count{tool="fast_tool"} 3'
+            'proms_mcp_tool_request_duration_seconds_count{tool="fast_tool"} 3'
             in metrics_text
         )
         assert (
-            'mcp_tool_request_duration_seconds_count{tool="slow_tool"} 2'
+            'proms_mcp_tool_request_duration_seconds_count{tool="slow_tool"} 2'
             in metrics_text
         )
         assert (
-            'mcp_tool_request_duration_seconds_count{tool="single_tool"} 1'
+            'proms_mcp_tool_request_duration_seconds_count{tool="single_tool"} 1'
             in metrics_text
         )
 
@@ -417,15 +417,15 @@ class TestHealthMetricsIntegration:
 
         # Zero values should still be included
         assert (
-            'mcp_tool_requests_total{tool="zero_tool",status="success"} 0'
+            'proms_mcp_tool_requests_total{tool="zero_tool",status="success"} 0'
             in metrics_text
         )
         assert (
-            'mcp_server_requests_total{method="GET",endpoint="/zero-endpoint"} 0'
+            'proms_mcp_server_requests_total{method="GET",endpoint="/zero-endpoint"} 0'
             in metrics_text
         )
-        assert "mcp_datasources_configured 0" in metrics_text
-        assert "mcp_connected_clients 0" in metrics_text
+        assert "proms_mcp_datasources_configured 0" in metrics_text
+        assert "proms_mcp_connected_clients 0" in metrics_text
 
     def test_prometheus_metrics_large_dataset(self) -> None:
         """Test metrics generation with large datasets."""
@@ -453,8 +453,8 @@ class TestHealthMetricsIntegration:
         metrics_text = get_prometheus_metrics(metrics_data)
 
         # Verify large values are handled correctly
-        assert "mcp_datasources_configured 1000" in metrics_text
-        assert "mcp_connected_clients 500" in metrics_text
+        assert "proms_mcp_datasources_configured 1000" in metrics_text
+        assert "proms_mcp_connected_clients 500" in metrics_text
 
         # Verify some of the generated metrics exist
         assert 'tool="tool_10"' in metrics_text

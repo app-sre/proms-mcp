@@ -457,7 +457,7 @@ async def query_instant(
         Dict with query results
 
     Note:
-        When using the time parameter, check your local system's current date/time
+        When using the time parameter, check your the current UTC date/time on local system
         to ensure queries use appropriate timestamps for meaningful results.
     """
     datasource, error = validate_datasource(datasource_id)
@@ -505,7 +505,7 @@ async def query_range(
         Dict with query results
 
     Note:
-        Always check your local system's current date/time when constructing
+        Always check the current UTC date/time on your local system when constructing
         start and end timestamps to ensure queries cover the intended time range.
     """
     datasource, error = validate_datasource(datasource_id)

@@ -3,6 +3,7 @@
 Contains authentication models and TokenReview-based token verification.
 """
 
+import ssl
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -174,9 +175,12 @@ class TokenReviewVerifier(TokenVerifier):
         # Configure HTTP client with proper CA certificate verification
         # Always verify TLS - either with custom CA or system CA store
         if self.ca_cert_path:
-            verify: str | bool = self.ca_cert_path  # Use custom CA certificate
+            # Use custom CA certificate with ssl.create_default_context()
+            ssl_context = ssl.create_default_context(cafile=self.ca_cert_path)
+            verify: ssl.SSLContext | bool = ssl_context
         else:
-            verify = True  # Use system CA certificate store
+            # Use system CA certificate store
+            verify = True
 
         tokenreview_url = f"{self.api_url}/apis/authentication.k8s.io/v1/tokenreviews"
 
@@ -186,7 +190,7 @@ class TokenReviewVerifier(TokenVerifier):
             url=tokenreview_url,
             payload_size=len(str(payload)),
             timeout_seconds=10.0,
-            tls_verify="custom_ca" if isinstance(verify, str) else "system_ca",
+            tls_verify="custom_ca" if isinstance(verify, ssl.SSLContext) else "system_ca",
         )
 
         async with httpx.AsyncClient(timeout=10.0, verify=verify) as client:

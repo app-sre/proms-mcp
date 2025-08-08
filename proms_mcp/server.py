@@ -47,7 +47,6 @@ metrics_data: dict[str, Any] = {
         lambda: defaultdict(int)
     ),  # method -> endpoint -> count
     "datasources_configured": 0,
-    "connected_clients": 0,  # Track active connections
     "server_start_time": time.time(),
 }
 

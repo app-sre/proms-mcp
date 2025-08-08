@@ -773,7 +773,6 @@ class TestFastMCPIntegration:
             "tool_request_durations",
             "server_requests_total",
             "datasources_configured",
-            "connected_clients",
             "server_start_time",
         ]
 
@@ -785,7 +784,7 @@ class TestFastMCPIntegration:
         assert isinstance(metrics_data["tool_request_durations"], dict)
         assert isinstance(metrics_data["server_requests_total"], dict)
         assert isinstance(metrics_data["datasources_configured"], int)
-        assert isinstance(metrics_data["connected_clients"], int)
+
         assert isinstance(metrics_data["server_start_time"], float)
 
     @pytest.mark.asyncio

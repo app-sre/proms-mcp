@@ -125,12 +125,34 @@ class TestMonitoring:
 
         metrics_text = get_prometheus_metrics(metrics_data)
 
-        # Check that buckets are present (cumulative counts)
-        # 50ms (0.05s) -> le="0.1" bucket: 1
-        # 800ms (0.8s) -> le="1.0" bucket: 1 + 1 = 2 (but algorithm is different)
-        # Let's just check the structure is correct
+        # Check that buckets are present with correct cumulative counts
+        # Updated buckets: [0.5, 1.0, 5.0, 10.0, 30.0, 60.0]
+        # 50ms (0.05s) -> in buckets: 0.5, 1.0, 5.0, 10.0, 30.0, 60.0
+        # 800ms (0.8s) -> in buckets: 1.0, 5.0, 10.0, 30.0, 60.0
+        # 2000ms (2s) -> in buckets: 5.0, 10.0, 30.0, 60.0
+        # 12000ms (12s) -> in buckets: 30.0, 60.0
         assert (
-            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="0.1"} 1'
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="0.5"} 1'
+            in metrics_text
+        )
+        assert (
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="1.0"} 2'
+            in metrics_text
+        )
+        assert (
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="5.0"} 3'
+            in metrics_text
+        )
+        assert (
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="10.0"} 3'
+            in metrics_text
+        )
+        assert (
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="30.0"} 4'
+            in metrics_text
+        )
+        assert (
+            'proms_mcp_tool_request_duration_seconds_bucket{tool="test_tool",le="60.0"} 4'
             in metrics_text
         )
         assert (
@@ -144,6 +166,83 @@ class TestMonitoring:
         assert (
             'proms_mcp_tool_request_duration_seconds_sum{tool="test_tool"} 14.85'
             in metrics_text
+        )
+
+    def test_histogram_cumulative_logic_correctness(self) -> None:
+        """Test that histogram buckets follow proper Prometheus cumulative semantics.
+
+        This test specifically validates the fix for the histogram implementation bug
+        where each observation should increment ALL buckets that are >= the observation value.
+        """
+        metrics_data: dict[str, Any] = {
+            "tool_requests_total": defaultdict(lambda: defaultdict(int)),
+            "tool_request_durations": defaultdict(list),
+            "server_requests_total": defaultdict(lambda: defaultdict(int)),
+            "datasources_configured": 0,
+        }
+
+        # Use a single observation to test the cumulative logic
+        # A 1.5 second request should appear in ALL buckets >= 1.5s
+        metrics_data["tool_request_durations"]["single_request"] = [1500.0]  # 1.5s
+
+        metrics_text = get_prometheus_metrics(metrics_data)
+
+        # Extract bucket values for verification
+        bucket_values = {}
+        for line in metrics_text.split("\n"):
+            if "single_request" in line and "bucket" in line and "le=" in line:
+                # Parse: bucket{tool="single_request",le="5.0"} 1
+                le_value = line.split('le="')[1].split('"')[0]
+                count = int(line.split("} ")[-1])
+                bucket_values[le_value] = count
+
+        # Validate cumulative logic: 1.5s request should be in buckets >= 1.5s
+        assert bucket_values["0.5"] == 0, "1.5s request should NOT be in 0.5s bucket"
+        assert bucket_values["1.0"] == 0, "1.5s request should NOT be in 1.0s bucket"
+        assert bucket_values["5.0"] == 1, "1.5s request SHOULD be in 5.0s bucket"
+        assert bucket_values["10.0"] == 1, "1.5s request SHOULD be in 10.0s bucket"
+        assert bucket_values["30.0"] == 1, "1.5s request SHOULD be in 30.0s bucket"
+        assert bucket_values["60.0"] == 1, "1.5s request SHOULD be in 60.0s bucket"
+        assert bucket_values["+Inf"] == 1, "1.5s request SHOULD be in +Inf bucket"
+
+        # Test with multiple observations to ensure cumulative behavior
+        metrics_data["tool_request_durations"]["multi_requests"] = [
+            300.0,  # 0.3s -> should be in: 0.5, 1.0, 5.0, 10.0, 30.0, 60.0
+            1500.0,  # 1.5s -> should be in: 5.0, 10.0, 30.0, 60.0
+            8000.0,  # 8.0s -> should be in: 10.0, 30.0, 60.0
+        ]
+
+        metrics_text = get_prometheus_metrics(metrics_data)
+
+        # Extract bucket values for multi-request test
+        multi_bucket_values = {}
+        for line in metrics_text.split("\n"):
+            if "multi_requests" in line and "bucket" in line and "le=" in line:
+                le_value = line.split('le="')[1].split('"')[0]
+                count = int(line.split("} ")[-1])
+                multi_bucket_values[le_value] = count
+
+        # Validate expected cumulative counts
+        assert multi_bucket_values["0.5"] == 1, (
+            "Only 0.3s request should be in 0.5s bucket"
+        )
+        assert multi_bucket_values["1.0"] == 1, (
+            "Only 0.3s request should be in 1.0s bucket"
+        )
+        assert multi_bucket_values["5.0"] == 2, (
+            "0.3s and 1.5s requests should be in 5.0s bucket"
+        )
+        assert multi_bucket_values["10.0"] == 3, (
+            "All 3 requests should be in 10.0s bucket"
+        )
+        assert multi_bucket_values["30.0"] == 3, (
+            "All 3 requests should be in 30.0s bucket"
+        )
+        assert multi_bucket_values["60.0"] == 3, (
+            "All 3 requests should be in 60.0s bucket"
+        )
+        assert multi_bucket_values["+Inf"] == 3, (
+            "All 3 requests should be in +Inf bucket"
         )
 
     @patch("proms_mcp.monitoring.HTTPServer")
@@ -187,8 +286,8 @@ class TestMonitoring:
 
         metrics_text = get_prometheus_metrics(metrics_data)
 
-        # Verify all buckets are present
-        buckets = ["0.1", "0.5", "1.0", "5.0", "10.0", "30.0"]
+        # Verify all buckets are present (updated buckets without 0.1s, with 60.0s)
+        buckets = ["0.5", "1.0", "5.0", "10.0", "30.0", "60.0"]
         for bucket in buckets:
             assert f'le="{bucket}"' in metrics_text
 

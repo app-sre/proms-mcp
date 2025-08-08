@@ -217,57 +217,16 @@ data:
           },
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
               "custom": {
-                "axisBorderShow": false,
-                "axisCenteredZero": false,
-                "axisColorMode": "text",
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "barWidthFactor": 0.6,
-                "drawStyle": "line",
-                "fillOpacity": 10,
-                "gradientMode": "none",
                 "hideFrom": {
                   "legend": false,
                   "tooltip": false,
-                  "vis": false,
-                  "viz": false
+                  "vis": false
                 },
-                "insertNulls": false,
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
                 "scaleDistribution": {
                   "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": false,
-                "stacking": {
-                  "group": "A",
-                  "mode": "none"
-                },
-                "thresholdsStyle": {
-                  "mode": "off"
                 }
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "s"
+              }
             },
             "overrides": []
           },
@@ -279,16 +238,40 @@ data:
           },
           "id": 3,
           "options": {
+            "calculate": false,
+            "cellGap": 2,
+            "cellValues": {
+              "unit": "short"
+            },
+            "color": {
+              "exponent": 0.5,
+              "fill": "dark-orange",
+              "mode": "spectrum",
+              "reverse": false,
+              "scale": "exponential",
+              "scheme": "Spectral",
+              "steps": 64
+            },
+            "exemplars": {
+              "color": "rgba(255,0,255,0.7)"
+            },
+            "filterValues": {
+              "le": 1e-9
+            },
             "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": true
+              "show": true
+            },
+            "rowsFrame": {
+              "layout": "auto"
             },
             "tooltip": {
-              "hideZeros": false,
               "mode": "single",
               "sort": "none"
+            },
+            "yAxis": {
+              "axisPlacement": "left",
+              "reverse": false,
+              "unit": "s"
             }
           },
           "pluginVersion": "11.6.3",
@@ -298,26 +281,16 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "histogram_quantile(0.95, rate(proms_mcp_tool_request_duration_seconds_bucket[5m]))",
-              "format": "time_series",
+              "expr": "increase(proms_mcp_tool_request_duration_seconds_bucket[2m])",
+              "format": "heatmap",
               "intervalFactor": 1,
-              "legendFormat": "{{tool}} (95th percentile)",
+              "legendFormat": "{{le}}",
               "refId": "A"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "${DS_PROMETHEUS}"
-              },
-              "expr": "histogram_quantile(0.50, rate(proms_mcp_tool_request_duration_seconds_bucket[5m]))",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "{{tool}} (50th percentile)",
-              "refId": "B"
             }
           ],
-          "title": "Tool Request Duration (Percentiles)",
-          "type": "timeseries"
+          "title": "Request Duration Distribution (Heatmap)",
+          "description": "Shows the distribution of request durations over time. Darker colors indicate faster requests, brighter colors indicate slower requests. Each vertical band represents a 2-minute window.",
+          "type": "heatmap"
         },
         {
           "datasource": {
@@ -479,7 +452,7 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "sum(rate(proms_mcp_tool_requests_total{status=\"success\"}[5m])) / sum(rate(proms_mcp_tool_requests_total[5m]))",
+              "expr": "sum(rate(proms_mcp_tool_requests_total{status=\"success\"}[5m])) / sum(rate(proms_mcp_tool_requests_total[5m])) or vector(1)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Success Rate",
@@ -549,7 +522,7 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "histogram_quantile(0.95, sum(rate(proms_mcp_tool_request_duration_seconds_bucket[5m])) by (le))",
+              "expr": "histogram_quantile(0.95, sum(rate(proms_mcp_tool_request_duration_seconds_bucket[15m]) or proms_mcp_tool_request_duration_seconds_bucket) by (le))",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "95th Percentile",
@@ -647,7 +620,7 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "rate(proms_mcp_tool_requests_total{status=\"error\"}[5m]) / rate(proms_mcp_tool_requests_total[5m]) * 100",
+              "expr": "rate(proms_mcp_tool_requests_total{status=\"error\"}[5m]) / rate(proms_mcp_tool_requests_total[5m]) * 100 or vector(0)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{tool}} error rate",
@@ -1128,8 +1101,9 @@ data:
         "to": "now"
       },
       "timepicker": {},
-      "timezone": "",
+      "timezone": "UTC",
       "title": "Proms MCP Server Dashboard",
+      "description": "Monitoring dashboard for Proms MCP Server - tracks tool performance, request durations, error rates, and system health",
       "uid": "proms-mcp",
-      "version": 4
+      "version": 5
     }

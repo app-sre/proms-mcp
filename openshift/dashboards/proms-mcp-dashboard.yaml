@@ -25,7 +25,7 @@ data:
           }
         ]
       },
-      "editable": false,
+      "editable": true,
       "fiscalYearStartMonth": 0,
       "graphTooltip": 0,
       "id": 1026395,
@@ -289,6 +289,7 @@ data:
             }
           ],
           "title": "Request Duration Distribution (Heatmap)",
+          "description": "Shows the distribution of request durations over time. Darker colors indicate faster requests, brighter colors indicate slower requests. Each vertical band represents a 2-minute window.",
           "type": "heatmap"
         },
         {
@@ -451,7 +452,7 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "sum(rate(proms_mcp_tool_requests_total{status=\"success\"}[5m])) / sum(rate(proms_mcp_tool_requests_total[5m]))",
+              "expr": "sum(rate(proms_mcp_tool_requests_total{status=\"success\"}[5m])) / sum(rate(proms_mcp_tool_requests_total[5m])) or vector(1)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "Success Rate",
@@ -619,7 +620,7 @@ data:
                 "type": "prometheus",
                 "uid": "${DS_PROMETHEUS}"
               },
-              "expr": "rate(proms_mcp_tool_requests_total{status=\"error\"}[5m]) / rate(proms_mcp_tool_requests_total[5m]) * 100",
+              "expr": "rate(proms_mcp_tool_requests_total{status=\"error\"}[5m]) / rate(proms_mcp_tool_requests_total[5m]) * 100 or vector(0)",
               "format": "time_series",
               "intervalFactor": 1,
               "legendFormat": "{{tool}} error rate",
@@ -1102,6 +1103,7 @@ data:
       "timepicker": {},
       "timezone": "UTC",
       "title": "Proms MCP Server Dashboard",
+      "description": "Monitoring dashboard for Proms MCP Server - tracks tool performance, request durations, error rates, and system health",
       "uid": "proms-mcp",
-      "version": 4
+      "version": 5
     }

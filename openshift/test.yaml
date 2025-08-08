@@ -52,6 +52,7 @@ objects:
             echo "Target URL: https://${MCP_SERVER_HOSTNAME}/mcp/"
             echo "Timeout: ${TIMEOUT_SECONDS}s"
             echo "Max retries: ${MAX_RETRIES}"
+            echo "Image tag: ${IMAGE_TAG}"
             
             # Get the service account token
             echo "🔑 Reading service account token..."

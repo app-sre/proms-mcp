@@ -41,7 +41,7 @@ objects:
         serviceAccountName: proms-mcp-server  # Use the same service account as the server
         containers:
         - name: curl-test
-          image: registry.redhat.io/ubi8/ubi-minimal:latest
+          image: registry.access.redhat.com/ubi9/ubi-minimal:latest
           command:
           - /bin/bash
           - -c

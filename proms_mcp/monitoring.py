@@ -97,24 +97,23 @@ def get_prometheus_metrics(metrics_data: dict[str, Any]) -> str:
     lines.append("# TYPE proms_mcp_tool_request_duration_seconds histogram")
     for tool, durations in metrics_data["tool_request_durations"].items():
         if durations:
-            # Simple histogram buckets
-            buckets = [0.1, 0.5, 1.0, 5.0, 10.0, 30.0]
+            # Histogram buckets
+            buckets = [0.5, 1.0, 5.0, 10.0, 30.0, 60.0]
             counts = [0] * len(buckets)
             total_count = len(durations)
             total_sum = sum(d / 1000.0 for d in durations)  # Convert ms to seconds
 
+            # For each duration, increment ALL buckets that are >= that duration
             for duration_ms in durations:
                 duration_s = duration_ms / 1000.0
                 for i, bucket in enumerate(buckets):
                     if duration_s <= bucket:
                         counts[i] += 1
 
-            # Cumulative counts for histogram
-            cumulative = 0
+            # Prometheus histograms are already cumulative by design with the above logic
             for i, (bucket, count) in enumerate(zip(buckets, counts)):
-                cumulative += count
                 lines.append(
-                    f'proms_mcp_tool_request_duration_seconds_bucket{{tool="{tool}",le="{bucket}"}} {cumulative}'
+                    f'proms_mcp_tool_request_duration_seconds_bucket{{tool="{tool}",le="{bucket}"}} {count}'
                 )
 
             lines.append(

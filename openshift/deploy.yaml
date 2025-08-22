@@ -37,7 +37,7 @@ parameters:
   description: "Authentication mode (none, active)"
   value: "active"
 - name: AUTH_CACHE_TTL_SECONDS
-  description: "Authentication cache TTL in seconds (default: 120 = 2 minutes)"
+  description: "Authentication cache TTL in seconds (default: 120 = 2 minutes, 0 = disable cache)"
   value: "120"
 - name: OPENSHIFT_API_URL
   description: "OpenShift API server URL for token validation (required for active auth)"

@@ -20,8 +20,8 @@ from fastmcp.server.auth.auth import AccessToken
 
 logger = structlog.get_logger()
 
-# Auth cache TTL from environment (default: 5 minutes)
-_AUTH_CACHE_TTL_SECONDS = int(os.getenv("AUTH_CACHE_TTL_SECONDS", "300"))
+# Auth cache TTL from environment (default: 2 minutes, 0 = disable cache)
+_AUTH_CACHE_TTL_SECONDS = int(os.getenv("AUTH_CACHE_TTL_SECONDS", "120"))
 
 # Authentication cache: configurable TTL, max 1000 entries, thread-safe
 _auth_cache: TTLCache[str, "User | None"] = TTLCache(
@@ -30,8 +30,8 @@ _auth_cache: TTLCache[str, "User | None"] = TTLCache(
 
 
 def _cache_key(token: str) -> str:
-    """Secure cache key from token hash."""
-    return hashlib.sha256(token.encode()).hexdigest()[:16]
+    """Secure cache key from full token hash."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def clear_auth_cache() -> None:

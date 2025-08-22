@@ -233,7 +233,7 @@ This ensures reliable shutdown behavior even with persistent client connections 
 - `GRAFANA_DATASOURCES_PATH`: Path to datasource config file (default: /etc/grafana/provisioning/datasources/datasources.yaml)
 - `QUERY_TIMEOUT`: Query timeout in seconds (default: 30)
 - `AUTH_MODE`: Authentication mode (`none` or `active`, default: `active`)
-- `AUTH_CACHE_TTL_SECONDS`: Authentication cache TTL in seconds (default: 300 = 5 minutes)
+- `AUTH_CACHE_TTL_SECONDS`: Authentication cache TTL in seconds (default: 120 = 2 minutes, 0 = disable cache)
 - `OPENSHIFT_API_URL`: OpenShift API server URL for user info authentication
 - `OPENSHIFT_CA_CERT_PATH`: Optional CA certificate path for custom TLS verification
 

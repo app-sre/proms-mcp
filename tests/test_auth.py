@@ -636,3 +636,67 @@ class TestOpenShiftUserVerifier:
 
         # Clean up and restore original module state
         importlib.reload(proms_mcp.auth)
+
+    @pytest.mark.asyncio
+    async def test_auth_cache_disable_with_ttl_zero(self) -> None:
+        """Test that AUTH_CACHE_TTL_SECONDS=0 disables caching."""
+        import os
+        from unittest.mock import patch
+
+        # Test cache disable with TTL=0
+        with patch.dict(os.environ, {"AUTH_CACHE_TTL_SECONDS": "0"}):
+            # Re-import to get new cache with TTL=0
+            import importlib
+
+            import proms_mcp.auth
+
+            importlib.reload(proms_mcp.auth)
+
+            # Verify the cache was created with TTL=0
+            assert proms_mcp.auth._AUTH_CACHE_TTL_SECONDS == 0
+            assert proms_mcp.auth._auth_cache.ttl == 0
+
+            # Test that caching is actually disabled
+            verifier = proms_mcp.auth.OpenShiftUserVerifier(
+                api_url="https://api.cluster.example.com:6443", ca_cert_path=None
+            )
+            token = "disable-cache-test-token"
+
+            user_response = {
+                "kind": "User",
+                "apiVersion": "user.openshift.io/v1",
+                "metadata": {
+                    "name": "no-cache-user",
+                    "uid": "no-cache-uid-123",
+                    "creationTimestamp": "2023-01-01T00:00:00Z",
+                },
+                "identities": [],
+            }
+
+            with patch("proms_mcp.auth.httpx.AsyncClient") as mock_client_class:
+                mock_client = AsyncMock()
+                mock_client_class.return_value.__aenter__.return_value = mock_client
+
+                mock_response = Mock()
+                mock_response.status_code = 200
+                mock_response.content = b'{"kind": "User"}'
+                mock_response.headers = {"content-type": "application/json"}
+                mock_response.text = '{"kind": "User"}'
+                mock_response.json.return_value = user_response
+                mock_client.get.return_value = mock_response
+
+                # First call
+                user1 = await verifier._validate_token_identity(token)
+                assert user1 is not None
+                assert user1.username == "no-cache-user"
+
+                # Second call with same token - should call API again (not cached)
+                user2 = await verifier._validate_token_identity(token)
+                assert user2 is not None
+                assert user2.username == "no-cache-user"
+
+                # Verify API was called twice (no caching occurred)
+                assert mock_client.get.call_count == 2
+
+        # Clean up and restore original module state
+        importlib.reload(proms_mcp.auth)
